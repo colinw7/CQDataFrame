@@ -1,0 +1,12 @@
+Data Frame
+
++ Prompt loop
+  + Enter Command (Command Frame)
+    + Command is what ? Shell, Tcl, Javascript ...
+  + Capture Output in 'area'
+  + allow area to be resized/scrolled/truncated ...
++ Special handling of output
+  + Escape codes
+  + Images
+  + Graphics (Embedded App/Charts)
+  + Tables

@@ -1,0 +1,13 @@
+*.o
+*.a
+
+moc_*.cpp
+
+src/Makefile
+
+test/Makefile
+test/CQDataFrameTest
+
+bin/
+obj/
+lib/
