@@ -16,9 +16,12 @@
 #include <iostream>
 
 class CQTabSplit;
+class CQFileBrowser;
 
+#ifdef MODEL_DATA
 class CQDataModel;
 class CQModelDetails;
+#endif
 
 class CQTcl;
 
@@ -26,6 +29,9 @@ class QTextStream;
 class QMenu;
 class QWebView;
 class QTextEdit;
+
+//class CQEdit;
+class CQVi;
 
 //---
 
@@ -47,9 +53,21 @@ class TclWidget;
 class ImageWidget;
 class CanvasWidget;
 class WebWidget;
-class MarkdownWidget;
+
 class HtmlWidget;
 class SVGWidget;
+
+#ifdef FILE_DATA
+class FileWidget;
+#endif
+
+#ifdef MARKDOWN_DATA
+class MarkdownWidget;
+#endif
+
+#ifdef FILE_MGR_DATA
+class FileMgrWidget;
+#endif
 
 //---
 
@@ -79,6 +97,9 @@ class Frame : public QFrame {
   using Vars = std::vector<QVariant>;
 
  public:
+  static void init();
+
+ public:
   Frame(QWidget *parent=nullptr);
  ~Frame();
 
@@ -86,6 +107,9 @@ class Frame : public QFrame {
   Scroll *rscroll() const { return rscroll_; }
 
   Status *status() const { return status_; }
+
+  Area *larea() const;
+  Area *rarea() const;
 
   //---
 
@@ -95,11 +119,21 @@ class Frame : public QFrame {
 
   bool processTclCmd(const QString &name, const Vars &vars);
 
+  TclCmdProc *getTclCommand(const QString &cmd) const;
+
+  //---
+
   bool setCmdRc(int rc);
   bool setCmdRc(double rc);
   bool setCmdRc(const QString &str);
   bool setCmdRc(const QVariant &rc);
   bool setCmdRc(const QStringList &rc);
+
+  //---
+
+  bool help(const QString &pattern, bool verbose, bool hidden);
+
+  void helpAll(bool verbose, bool hidden);
 
   //---
 
@@ -110,11 +144,13 @@ class Frame : public QFrame {
 
   //---
 
+#ifdef MODEL_DATA
   QString addModel(CQDataModel *model);
 
   CQDataModel *getModel(const QString &name) const;
 
   CQModelDetails *getModelDetails(const QString &name) const;
+#endif
 
   //---
 
@@ -122,15 +158,18 @@ class Frame : public QFrame {
   void setCanvas(CanvasWidget *canvas) { canvas_ = canvas; }
 
  private:
+#ifdef MODEL_DATA
   struct ModelData {
     QString         id;
     CQDataModel*    model   { nullptr };
     CQModelDetails* details { nullptr };
   };
 
+  using NamedModel = std::map<QString, ModelData>;
+#endif
+
   using CommandNames = std::vector<QString>;
   using CommandProcs = std::map<QString, TclCmdProc *>;
-  using NamedModel   = std::map<QString, ModelData>;
 
   CQTabSplit*   tab_     { nullptr };
   Scroll*       lscroll_ { nullptr };
@@ -140,7 +179,9 @@ class Frame : public QFrame {
   CommandNames  commandNames_;
   CommandProcs  commandProcs_;
 
+#ifdef MODEL_DATA
   NamedModel namedModel_;
+#endif
 
   CanvasWidget *canvas_ { nullptr };
 };
@@ -198,14 +239,28 @@ class Area : public QFrame {
   UnixWidget    *addUnixWidget   (const QString &cmd, const Args &args, const QString &res);
   TclWidget     *addTclWidget    (const QString &line, const QString &res);
 
-  ImageWidget    *addImageWidget   (const QString &name);
-  CanvasWidget   *addCanvasWidget  (int width, int height);
-  WebWidget      *addWebWidget     (const QString &addr);
+  ImageWidget  *addImageWidget (const QString &name);
+  CanvasWidget *addCanvasWidget(int width, int height);
+  WebWidget    *addWebWidget   (const QString &addr);
+
+  HtmlWidget *addHtmlWidget(const FileText &fileText);
+  SVGWidget  *addSVGWidget (const FileText &fileText);
+
+#ifdef FILE_DATA
+  FileWidget *addFileWidget(const QString &fileName);
+#endif
+
+#ifdef MARKDOWN_DATA
   MarkdownWidget *addMarkdownWidget(const FileText &fileText);
-  HtmlWidget     *addHtmlWidget    (const FileText &fileText);
-  SVGWidget      *addSVGWidget     (const FileText &fileText);
+#endif
+
+#ifdef FILE_MGR_DATA
+  FileMgrWidget  *addFileMgrWidget ();
+#endif
 
   //---
+
+  void scrollToEnd();
 
   void moveToEnd(Widget *widget);
 
@@ -250,10 +305,16 @@ class Area : public QFrame {
 class Widget : public QFrame {
   Q_OBJECT
 
+  Q_PROPERTY(int width  READ width  WRITE setWidth )
+  Q_PROPERTY(int height READ height WRITE setHeight)
+
  public:
   Widget(Area *area);
 
   Area *area() const { return area_; }
+
+  Area *larea() const;
+  Area *rarea() const;
 
   virtual QString id() const = 0;
 
@@ -265,13 +326,22 @@ class Widget : public QFrame {
   bool isDocked() const { return docked_; }
 
   int x() const { return x_; }
-  void setX(int x) { x_ = x; }
+  virtual void setX(int x) { x_ = x; }
 
   int y() const { return y_; }
-  void setY(int y) { y_ = y; }
+  virtual void setY(int y) { y_ = y; }
 
-  virtual bool getNameValue(const QString & /*name*/, QVariant & /*value*/) const { return false; }
-  virtual bool setNameValue(const QString & /*name*/, const QVariant & /*value*/) { return false; }
+  virtual int width() const { return width_; }
+  virtual void setWidth(int w) { width_ = w; }
+
+  virtual int height() const { return height_; }
+  virtual void setHeight(int h) { height_ = h; }
+
+  virtual int defaultWidth () const { return 100; }
+  virtual int defaultHeight() const { return 100; }
+
+  virtual bool getNameValue(const QString &name, QVariant &value) const;
+  virtual bool setNameValue(const QString &name, const QVariant &value);
 
   virtual void addMenuItems(QMenu *menu);
 
@@ -336,6 +406,9 @@ class Widget : public QFrame {
 
   virtual bool canDock() const { return true; }
 
+  virtual bool canMove  () const { return true; }
+  virtual bool canResize() const { return true; }
+
   virtual bool canClose() const { return true; }
 
   void contextMenuEvent(QContextMenuEvent *e) override;
@@ -380,8 +453,11 @@ class Widget : public QFrame {
     int  moveCharNum  { -1 };
 
     bool dragging { false };
+    bool resizing { false };
     int  dragX    { 0 };
     int  dragY    { 0 };
+    int  dragW    { 0 };
+    int  dragH    { 0 };
     int  dragX1   { 0 };
     int  dragY1   { 0 };
     int  dragX2   { 0 };
@@ -391,8 +467,11 @@ class Widget : public QFrame {
       pressed = false;
 
       dragging = false;
+      resizing = false;
       dragX    = 0;
       dragY    = 0;
+      dragW    = 0;
+      dragH    = 0;
       dragX1   = 0;
       dragY1   = 0;
       dragX2   = 0;
@@ -417,6 +496,8 @@ class Widget : public QFrame {
   int       margin_   { 2 };
   int       x_        { 0 };
   int       y_        { 0 };
+  int       width_    { -1 };
+  int       height_   { -1 };
   LineList  lines_;
   MouseData mouseData_;
 };
@@ -427,16 +508,21 @@ class Widget : public QFrame {
 class TextWidget : public Widget {
   Q_OBJECT
 
+  Q_PROPERTY(QString text    READ text    WRITE setText   )
+  Q_PROPERTY(bool    isError READ isError WRITE setIsError)
+
  public:
   TextWidget(Area *area, const QString &text="");
 
   QString id() const override;
 
+  //! get/set text
   const QString &text() const { return text_; }
   void setText(const QString &text);
 
   QSize calcSize() const override;
 
+  //! get/set is error
   bool isError() const { return isError_; }
   void setIsError(bool b) { isError_ = b; }
 
@@ -465,11 +551,17 @@ class TextWidget : public Widget {
 class UnixWidget : public TextWidget {
   Q_OBJECT
 
+  Q_PROPERTY(QString command READ cmd WRITE setCmd)
+
  public:
   using Args = std::vector<std::string>;
 
  public:
   UnixWidget(Area *area, const QString &cmd, const Args &args, const QString &res);
+
+  //! get/set command
+  const QString &cmd() const { return cmd_; }
+  void setCmd(const QString &s) { cmd_ = s; }
 
   void addMenuItems(QMenu *menu) override;
 
@@ -489,12 +581,16 @@ class UnixWidget : public TextWidget {
 
 //---
 
-// unix command
+// tcl command
 class TclWidget : public TextWidget {
   Q_OBJECT
 
  public:
-  TclWidget(Area *area, const QString &line, const QString &res);
+  TclWidget(Area *area, const QString &cmd, const QString &res);
+
+  //! get/set command
+  const QString &cmd() const { return cmd_; }
+  void setCmd(const QString &s) { cmd_ = s; }
 
   void addMenuItems(QMenu *menu) override;
 
@@ -507,12 +603,13 @@ class TclWidget : public TextWidget {
   void draw(QPainter *painter) override;
 
  private:
-  QString line_;
+  QString cmd_;
 };
 
 //---
 
 // history text
+// TODO: timestamp
 class HistoryWidget : public Widget {
   Q_OBJECT
 
@@ -554,6 +651,9 @@ class CommandWidget : public Widget {
   CommandWidget(Area *area);
 
   QString id() const override;
+
+  bool canMove  () const override { return false; }
+  bool canResize() const override { return false; }
 
   bool isCompleteLine(const QString &line, bool &isTcl) const;
 
@@ -703,23 +803,24 @@ class CommandWidget : public Widget {
 class ImageWidget : public Widget {
   Q_OBJECT
 
-  Q_PROPERTY(QString file   READ file   WRITE setFile  )
-  Q_PROPERTY(int     width  READ width  WRITE setWidth )
-  Q_PROPERTY(int     height READ height WRITE setHeight)
+  Q_PROPERTY(QString file READ file WRITE setFile  )
 
  public:
   ImageWidget(Area *area, const QString &file);
 
   QString id() const override;
 
+  //! get/set file name
   const QString &file() const { return file_; }
   void setFile(const QString &s);
 
-  int width() const { return width_; }
-  void setWidth(int i);
+  //! get/set custom width
+  int width() const override;
+  void setWidth (int w) override;
 
-  int height() const { return height_; }
-  void setHeight(int i);
+  //! get/set custom height
+  int height() const override;
+  void setHeight(int h) override;
 
   bool getNameValue(const QString &name, QVariant &value) const override;
   bool setNameValue(const QString &name, const QVariant &value) override;
@@ -736,8 +837,6 @@ class ImageWidget : public Widget {
  private:
   QString file_;
   QImage  image_;
-  int     width_  { -1 };
-  int     height_ { -1 };
   QImage  simage_;
 };
 
@@ -747,9 +846,6 @@ class ImageWidget : public Widget {
 class CanvasWidget : public Widget {
   Q_OBJECT
 
-  Q_PROPERTY(int width  READ width  WRITE setWidth )
-  Q_PROPERTY(int height READ height WRITE setHeight)
-
  public:
   CanvasWidget(Area *area, int width, int height);
 
@@ -758,14 +854,25 @@ class CanvasWidget : public Widget {
   bool getNameValue(const QString &name, QVariant &value) const override;
   bool setNameValue(const QString &name, const QVariant &value) override;
 
-  int width() const { return width_; }
-  void setWidth(int i) { width_ = i; }
-
-  int height() const { return height_; }
-  void setHeight(int i) { height_ = i; }
-
+  //! get/set draw proc
   const QString &drawProc() const { return drawProc_; }
   void setDrawProc(const QString &s) { drawProc_ = s; }
+
+  //! get/set xmin
+  double xmin() const { return xmin_; }
+  void setXMin(double r) { xmin_ = r; }
+
+  //! get/set ymin
+  double ymin() const { return ymin_; }
+  void setYMin(double r) { ymin_ = r; }
+
+  //! get/set xmax
+  double xmax() const { return xmax_; }
+  void setXMax(double r) { xmax_ = r; }
+
+  //! get/set ymax
+  double ymax() const { return ymax_; }
+  void setYMax(double r) { ymax_ = r; }
 
   QSize calcSize() const override;
 
@@ -775,19 +882,34 @@ class CanvasWidget : public Widget {
 
   void drawPath(const QString &path);
 
+  void drawPixel(const QPointF &p);
+
+  bool isMapping() const { return mapping_; }
+  void setMapping(bool b) { mapping_ = b; }
+
+  void windowToPixel(double wx, double wy, double *px, double *py) const;
+  void pixelToWindow(double px, double py, double *wx, double *wy) const;
+
  private:
   void handleResize(int w, int h) override;
+
+  void setWindowRange();
 
   void draw(QPainter *painter) override;
 
  private:
   using DisplayRange = CDisplayRange2D;
 
-  int          width_   { 100 };
-  int          height_  { 100 };
   QString      drawProc_;
   DisplayRange displayRange_;
-  QPainter*    painter_ { nullptr };
+  QImage       image_;
+  QPainter*    ipainter_ { nullptr };
+  bool         dirty_    { true };
+  double       xmin_     { 0.0 };
+  double       ymin_     { 0.0 };
+  double       xmax_     { 100.0 };
+  double       ymax_     { 100.0 };
+  bool         mapping_  { true };
 };
 
 //---
@@ -818,6 +940,7 @@ class WebWidget : public Widget {
 
 //---
 
+#ifdef MARKDOWN_DATA
 // markdown
 class MarkdownWidget : public Widget {
   Q_OBJECT
@@ -839,6 +962,7 @@ class MarkdownWidget : public Widget {
   FileText   fileText_;
   QTextEdit* textEdit_ { nullptr };
 };
+#endif
 
 //---
 
@@ -887,11 +1011,65 @@ class SVGWidget : public Widget {
   void draw(QPainter *painter) override;
 
  private:
-  FileText   fileText_;
-  QTextEdit *textEdit_ { nullptr };
-  int        width_    { -1 };
-  int        height_   { -1 };
+  FileText fileText_;
 };
+
+//---
+
+#ifdef FILE_DATA
+// file
+class FileWidget : public Widget {
+  Q_OBJECT
+
+ public:
+  FileWidget(Area *area, const QString &fileName);
+
+  QString id() const override;
+
+  const QString &fileName() const { return fileName_; }
+
+  bool getNameValue(const QString &name, QVariant &value) const override;
+  bool setNameValue(const QString &name, const QVariant &value) override;
+
+  QSize calcSize() const override;
+
+ private:
+  void draw(QPainter *painter) override;
+
+ private:
+  QString fileName_;
+//CQEdit* edit_ { nullptr };
+  CQVi*   edit_ { nullptr };
+};
+#endif
+
+//---
+
+#ifdef FILE_MGR_DATA
+// filemgr
+class FileMgrWidget : public Widget {
+  Q_OBJECT
+
+ public:
+  FileMgrWidget(Area *area);
+
+  QString id() const override;
+
+  bool getNameValue(const QString &name, QVariant &value) const override;
+  bool setNameValue(const QString &name, const QVariant &value) override;
+
+  QSize calcSize() const override;
+
+ private:
+  void draw(QPainter *painter) override;
+
+ private slots:
+  void fileActivated(const QString &filename);
+
+ private:
+  CQFileBrowser *fileMgr_ { nullptr };
+};
+#endif
 
 //---
 
@@ -1415,6 +1593,11 @@ class TclCmdBaseArgs {
 
   //---
 
+  // get parsed args (non options)
+  const Args &getParseArgs() const { return parseArgs_; }
+
+  //---
+
   // get arg data for option
   CmdArg *getCmdOpt(const QString &name) {
     for (auto &cmdArg : cmdArgs_) {
@@ -1423,6 +1606,19 @@ class TclCmdBaseArgs {
     }
 
     return nullptr;
+  }
+
+  //---
+
+  QStringList getCmdArgNames() const {
+    QStringList names;
+
+    for (auto &cmdArg : cmdArgs_) {
+      if (cmdArg.isOpt())
+        names.push_back("-" + cmdArg.name());
+    }
+
+    return names;
   }
 
   //---
@@ -1718,19 +1914,36 @@ class Tcl##NAME##Cmd : public TclCmdProc { \
                            const NameValueMap &nameValueMap=NameValueMap()) override; \
 };
 
+CQDATA_DEF_TCL_CMD(Help)
+CQDATA_DEF_TCL_CMD(Complete)
+
 CQDATA_DEF_TCL_CMD(Image)
 CQDATA_DEF_TCL_CMD(Canvas)
 CQDATA_DEF_TCL_CMD(Web)
-CQDATA_DEF_TCL_CMD(Markdown)
 CQDATA_DEF_TCL_CMD(Html)
 CQDATA_DEF_TCL_CMD(SVG)
-CQDATA_DEF_TCL_CMD(Model)
+
+#ifdef FILE_DATA
+CQDATA_DEF_TCL_CMD(File)
+#endif
+
+#ifdef MARKDOWN_DATA
+CQDATA_DEF_TCL_CMD(Markdown)
+#endif
+
+#ifdef FILE_MGR_DATA
+CQDATA_DEF_TCL_CMD(FileMgr)
+#endif
 
 CQDATA_DEF_TCL_CMD(GetData)
 CQDATA_DEF_TCL_CMD(SetData)
 
+#ifdef MODEL_DATA
+CQDATA_DEF_TCL_CMD(Model)
+
 CQDATA_DEF_TCL_CMD(GetModelData)
 CQDATA_DEF_TCL_CMD(ShowModel)
+#endif
 
 //---
 

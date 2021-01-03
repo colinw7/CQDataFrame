@@ -3,14 +3,41 @@
 #include <CQTabSplit.h>
 #include <CQUtil.h>
 #include <CCommand.h>
+
+#ifdef MARKDOWN_DATA
 #include <CMarkdown.h>
+#endif
+
+#ifdef MODEL_DATA
 #include <CQCsvModel.h>
 #include <CQModelDetails.h>
 #include <CQModelUtil.h>
-#include <CSVGUtil.h>
+#endif
+
 #include <CQStrParse.h>
+#include <CQStrUtil.h>
+
+#ifdef FILE_MGR_DATA
+#include <CQFileBrowser.h>
+#include <CFileBrowser.h>
+#include <CQDirView.h>
+#include <CFileUtil.h>
+#endif
+
+#include <CTclParse.h>
+#include <CSVGUtil.h>
 #include <CFileMatch.h>
 #include <CFile.h>
+
+#ifdef FILE_DATA
+//#include <CQEdit.h>
+#include <CQVi.h>
+#endif
+
+#ifdef ESCAPE_PARSER
+#include <CEscapeParse.h>
+#endif
+
 #include <CEnv.h>
 #include <COSFile.h>
 #include <COSExec.h>
@@ -38,6 +65,44 @@
 #include <QTextStream>
 
 namespace CQDataFrame {
+
+#ifdef ESCAPE_PARSER
+class EscapeParse : public CEscapeParse {
+ public:
+  EscapeParse() { }
+
+ ~EscapeParse() { }
+
+  const std::string &str() const { return str_; }
+
+  void handleChar(char c) {
+    str_ +=  c;
+  }
+
+  void handleGraphic(char) {
+  }
+
+  void handleEscape(const CEscapeData *e) {
+    if      (e->type == CEscapeType::BS ) { }
+    else if (e->type == CEscapeType::HT ) { str_ += '\t'; }
+    else if (e->type == CEscapeType::LF ) { str_ += '\n'; }
+    else if (e->type == CEscapeType::VT ) { str_ += '\v'; }
+    else if (e->type == CEscapeType::FF ) { str_ += '\f'; }
+    else if (e->type == CEscapeType::CR ) { str_ += '\r'; }
+    else if (e->type == CEscapeType::SGR) {
+    }
+  }
+
+  void log(const std::string &) const { }
+
+  void logError(const std::string &) const { }
+
+  std::string waitMessage(const char *, uint) { return ""; }
+
+ private:
+  std::string str_;
+};
+#endif
 
 bool stringToBool(const QString &str, bool *ok) {
   QString lstr = str.toLower();
@@ -80,6 +145,22 @@ bool fileToLines(const QString &fileName, QStringList &lines)
   return true;
 }
 
+QStringList completeFile(const QString &file) {
+  QStringList strs;
+
+  CFileMatch fileMatch;
+
+  std::vector<std::string> files;
+
+  if (! fileMatch.matchPrefix(file.toStdString(), files))
+    return strs;
+
+  for (const auto &file : files)
+    strs << file.c_str();
+
+  return strs;
+}
+
 //---
 
 class TclCmd {
@@ -89,19 +170,23 @@ class TclCmd {
  public:
   TclCmd(Frame *frame, const QString &name) :
    frame_(frame), name_(name) {
-    cmdId_ = frame_->qtcl()->createObjCommand(name_,
+    auto *qtcl = frame_->qtcl();
+
+    cmdId_ = qtcl->createObjCommand(name_,
       (CQTcl::ObjCmdProc) &TclCmd::commandProc, (CQTcl::ObjCmdData) this);
   }
 
   static int commandProc(ClientData clientData, Tcl_Interp *, int objc, const Tcl_Obj **objv) {
     auto *command = (TclCmd *) clientData;
 
+    auto *qtcl = command->frame_->qtcl();
+
     Vars vars;
 
     for (int i = 1; i < objc; ++i) {
       auto *obj = const_cast<Tcl_Obj *>(objv[i]);
 
-      vars.push_back(command->frame_->qtcl()->variantFromObj(obj));
+      vars.push_back(qtcl->variantFromObj(obj));
     }
 
     if (! command->frame_->processTclCmd(command->name_, vars))
@@ -118,10 +203,33 @@ class TclCmd {
 
 //---
 
+void
+Frame::
+init()
+{
+  static bool initialized;
+
+  if (! initialized) {
+#ifdef FILE_DATA
+    //CQEdit::init();
+#endif
+
+#ifdef FILE_MGR_DATA
+    CQDirViewFactory::init();
+#endif
+
+    initialized = true;
+  }
+}
+
 Frame::
 Frame(QWidget *parent) :
  QFrame(parent)
 {
+  Frame::init();
+
+  //---
+
   setObjectName("dataFrame");
 
   QVBoxLayout *layout = new QVBoxLayout(this);
@@ -154,26 +262,58 @@ Frame(QWidget *parent) :
 
   qtcl_->createAlias("echo", "puts");
 
-  addTclCommand("image"   , new TclImageCmd   (this));
-  addTclCommand("canvas"  , new TclCanvasCmd  (this));
-  addTclCommand("web"     , new TclWebCmd     (this));
+  addTclCommand("help"    , new TclHelpCmd    (this));
+  addTclCommand("complete", new TclCompleteCmd(this));
+
+  addTclCommand("image" , new TclImageCmd (this));
+  addTclCommand("canvas", new TclCanvasCmd(this));
+  addTclCommand("web"   , new TclWebCmd   (this));
+  addTclCommand("html"  , new TclHtmlCmd  (this));
+  addTclCommand("svg"   , new TclSVGCmd   (this));
+
+#ifdef FILE_DATA
+  addTclCommand("file", new TclFileCmd(this));
+#endif
+
+#ifdef MARKDOWN_DATA
   addTclCommand("markdown", new TclMarkdownCmd(this));
-  addTclCommand("html"    , new TclHtmlCmd    (this));
-  addTclCommand("svg"     , new TclSVGCmd     (this));
-  addTclCommand("model"   , new TclModelCmd   (this));
+#endif
+
+#ifdef FILE_MGR_DATA
+  addTclCommand("filemgr", new TclFileMgrCmd (this));
+#endif
 
   addTclCommand("get_data", new TclGetDataCmd(this));
   addTclCommand("set_data", new TclSetDataCmd(this));
 
+#ifdef MODEL_DATA
+  addTclCommand("model", new TclModelCmd(this));
+
   addTclCommand("get_model_data", new TclGetModelDataCmd(this));
   addTclCommand("show_model"    , new TclShowModelCmd   (this));
-
+#endif
 }
 
 Frame::
 ~Frame()
 {
   delete qtcl_;
+}
+
+//---
+
+Area *
+Frame::
+larea() const
+{
+  return lscroll_->area();
+}
+
+Area *
+Frame::
+rarea() const
+{
+  return rscroll_->area();
 }
 
 //---
@@ -210,6 +350,85 @@ processTclCmd(const QString &name, const Vars &vars)
   //---
 
   return false;
+}
+
+TclCmdProc *
+Frame::
+getTclCommand(const QString &name) const
+{
+  auto p = commandProcs_.find(name);
+
+  return (p != commandProcs_.end() ? (*p).second : nullptr);
+}
+
+//------
+
+bool
+Frame::
+help(const QString &pattern, bool verbose, bool hidden)
+{
+  using Procs = std::vector<TclCmdProc *>;
+
+  Procs procs;
+
+  auto p = commandProcs_.find(pattern);
+
+  if (p != commandProcs_.end()) {
+    procs.push_back((*p).second);
+  }
+  else {
+    QRegExp re(pattern, Qt::CaseSensitive, QRegExp::Wildcard);
+
+    for (auto &p : commandProcs_) {
+      if (re.exactMatch(p.first))
+        procs.push_back(p.second);
+    }
+  }
+
+  if (procs.empty()) {
+    std::cout << "Command not found\n";
+    return false;
+  }
+
+  for (const auto &proc : procs) {
+    if (verbose) {
+      Vars vars;
+
+      TclCmdArgs args(proc->name(), vars);
+
+      proc->addArgs(args);
+
+      args.help(hidden);
+    }
+    else {
+      std::cout << proc->name().toStdString() << "\n";
+    }
+  }
+
+  return true;
+}
+
+void
+Frame::
+helpAll(bool verbose, bool hidden)
+{
+  // all procs
+  for (auto &p : commandProcs_) {
+    auto *proc = p.second;
+
+    if (verbose) {
+      Vars vars;
+
+      TclCmdArgs args(proc->name(), vars);
+
+      proc->addArgs(args);
+
+      args.help(hidden);
+    }
+    else {
+      std::cout << proc->name().toStdString() << "\n";
+    }
+  }
 }
 
 //------
@@ -277,8 +496,8 @@ save()
 
   QTextStream os(&file);
 
-  lscroll_->area()->save(os);
-  rscroll_->area()->save(os);
+  larea()->save(os);
+  rarea()->save(os);
 }
 
 bool
@@ -302,7 +521,7 @@ load(const QString &fileName)
   if (! fileToLines(fileName, lines))
     return false;
 
-  auto *area = lscroll()->area();
+  auto *area = larea();
 
   auto *commandWidget = area->commandWidget();
   assert(commandWidget);
@@ -332,9 +551,12 @@ load(const QString &fileName)
 
   area->moveToEnd(commandWidget);
 
+  area->scrollToEnd();
+
   return true;
 }
 
+#ifdef MODEL_DATA
 QString
 Frame::
 addModel(CQDataModel *model)
@@ -373,6 +595,7 @@ getModelDetails(const QString &id) const
 
   return (*p).second.details;
 }
+#endif
 
 //---
 
@@ -428,7 +651,7 @@ commandWidget() const
   if (command_)
     return command_;
 
-  return scroll()->frame()->lscroll()->area()->commandWidget();
+  return scroll()->frame()->larea()->commandWidget();
 }
 
 void
@@ -476,9 +699,9 @@ addUnixWidget(const QString &cmd, const Args &args, const QString &res)
 
 TclWidget *
 Area::
-addTclWidget(const QString &line, const QString &res)
+addTclWidget(const QString &cmd, const QString &res)
 {
-  auto *widget = new TclWidget(this, line, res);
+  auto *widget = new TclWidget(this, cmd, res);
 
   addWidget(widget);
 
@@ -535,6 +758,7 @@ addWebWidget(const QString &addr)
   return widget;
 }
 
+#ifdef MARKDOWN_DATA
 MarkdownWidget *
 Area::
 addMarkdownWidget(const FileText &fileText)
@@ -545,6 +769,7 @@ addMarkdownWidget(const FileText &fileText)
 
   return widget;
 }
+#endif
 
 HtmlWidget *
 Area::
@@ -567,6 +792,32 @@ addSVGWidget(const FileText &fileText)
 
   return widget;
 }
+
+#ifdef FILE_DATA
+FileWidget *
+Area::
+addFileWidget(const QString &filename)
+{
+  auto *widget = new FileWidget(this, filename);
+
+  addWidget(widget);
+
+  return widget;
+}
+#endif
+
+#ifdef FILE_MGR_DATA
+FileMgrWidget *
+Area::
+addFileMgrWidget()
+{
+  auto *widget = new FileMgrWidget(this);
+
+  addWidget(widget);
+
+  return widget;
+}
+#endif
 
 void
 Area::
@@ -650,6 +901,13 @@ updateWidgets()
 
 void
 Area::
+scrollToEnd()
+{
+  scroll()->ensureVisible(0, scroll()->getYSize());
+}
+
+void
+Area::
 moveToEnd(Widget *widget)
 {
   Widgets widgets;
@@ -716,7 +974,7 @@ placeWidgets()
       auto size = widget->sizeHint();
 
       int w1 = size.width (); if (w1 <= 0) w1 = width() - 2*margin_;
-      int h1 = size.height(); if (h1 <= 0) h1 = 100;
+      int h1 = size.height(); if (h1 <= 0) h1 = widget->defaultWidth();
 
       maxWidth = std::max(maxWidth, w1 + 2*margin_);
 
@@ -749,8 +1007,8 @@ placeWidgets()
 
       int x1 = widget->x() + xo;
       int y1 = widget->y() + yo;
-      int w1 = size.width (); if (w1 <= 0) w1 = 100;
-      int h1 = size.height(); if (h1 <= 0) h1 = 100;
+      int w1 = size.width (); if (w1 <= 0) w1 = widget->defaultWidth ();
+      int h1 = size.height(); if (h1 <= 0) h1 = widget->defaultHeight();
 
       maxWidth  = std::max(maxWidth , x1 + w1);
       maxHeight = std::max(maxHeight, y1 + h1);
@@ -787,6 +1045,8 @@ Widget(Area *area) :
 
   setFocusPolicy(Qt::NoFocus);
 
+  setMouseTracking(true);
+
   setContextMenuPolicy(Qt::DefaultContextMenu);
 }
 
@@ -808,24 +1068,15 @@ setDocked(bool b)
   if (b != docked_) {
     docked_ = b;
 
-    auto *frame = area()->scroll()->frame();
-
-    auto *lscroll = frame->lscroll();
-    auto *rscroll = frame->rscroll();
-
     if (docked_) {
-      lscroll->area()->removeWidget(this);
+      larea()->removeWidget(this);
 
-      area_ = rscroll->area();
-
-      rscroll->area()->addWidget(this);
+      rarea()->addWidget(this);
     }
     else {
-      rscroll->area()->removeWidget(this);
+      rarea()->removeWidget(this);
 
-      area_ = lscroll->area();
-
-      lscroll->area()->addWidget(this);
+      larea()->addWidget(this);
     }
   }
 }
@@ -856,6 +1107,57 @@ contextMenuEvent(QContextMenuEvent *e)
   (void) menu->exec(e->globalPos());
 
   delete menu;
+}
+
+Area *
+Widget::
+larea() const
+{
+  auto *frame = area()->scroll()->frame();
+
+  return frame->larea();
+}
+
+Area *
+Widget::
+rarea() const
+{
+  auto *frame = area()->scroll()->frame();
+
+  return frame->rarea();
+}
+
+bool
+Widget::
+getNameValue(const QString &name, QVariant &value) const
+{
+  if      (name == "x"     ) value = x     ();
+  else if (name == "y"     ) value = y     ();
+  else if (name == "width" ) value = width ();
+  else if (name == "height") value = height();
+  else
+    return false;
+
+  return true;
+}
+
+bool
+Widget::
+setNameValue(const QString &name, const QVariant &value)
+{
+  bool ok { true };
+
+  if      (name == "width")
+    setWidth(value.toInt(&ok));
+  else if (name == "height")
+    setHeight(value.toInt(&ok));
+  else
+    return false;
+
+  if (! ok)
+    return false;
+
+  return true;
 }
 
 void
@@ -912,24 +1214,37 @@ mousePressEvent(QMouseEvent *e)
   if      (e->button() == Qt::LeftButton) {
     const auto &margins = contentsMargins();
 
-    if (e->x() < margins.left() || e->y() < margins.top()) {
-      if (! area()->scroll()->isCommand()) {
+    if (e->x() < margins.left() || e->x() >= width () - margins.right () - 1 ||
+        e->y() < margins.top () || e->y() >= height() - margins.bottom() - 1) {
+      if (e->x() >= width () - margins.right () - 1 &&
+          e->y() >= height() - margins.bottom() - 1) {
+        mouseData_.dragging = true;
+        mouseData_.resizing = true;
+      }
+      else {
+        if (isDocked())
+          mouseData_.dragging = true;
+      }
+
+      if (mouseData_.dragging) {
         auto pos = mapToGlobal(e->pos());
 
-        mouseData_.dragging = true;
-        mouseData_.dragX    = this->x();
-        mouseData_.dragY    = this->y();
-        mouseData_.dragX1   = pos.x();
-        mouseData_.dragY1   = pos.y();
+        mouseData_.dragX  = this->x();
+        mouseData_.dragY  = this->y();
+        mouseData_.dragW  = this->width ();
+        mouseData_.dragH  = this->height();
+        mouseData_.dragX1 = pos.x();
+        mouseData_.dragY1 = pos.y();
+
+        return;
       }
     }
-    else {
-      pixelToText(e->pos(), mouseData_.pressLineNum, mouseData_.pressCharNum);
 
-      mouseData_.pressed     = true;
-      mouseData_.moveLineNum = mouseData_.pressLineNum;
-      mouseData_.moveCharNum = mouseData_.pressCharNum;
-    }
+    pixelToText(e->pos(), mouseData_.pressLineNum, mouseData_.pressCharNum);
+
+    mouseData_.pressed     = true;
+    mouseData_.moveLineNum = mouseData_.pressLineNum;
+    mouseData_.moveCharNum = mouseData_.pressCharNum;
   }
   else if (e->button() == Qt::MiddleButton) {
     paste();
@@ -951,18 +1266,47 @@ mouseMoveEvent(QMouseEvent *e)
     int dx = mouseData_.dragX2 - mouseData_.dragX1;
     int dy = mouseData_.dragY2 - mouseData_.dragY1;
 
-    this->setX(mouseData_.dragX + dx);
-    this->setY(mouseData_.dragY + dy);
+    if (! mouseData_.resizing) {
+      this->setX(mouseData_.dragX + dx);
+      this->setY(mouseData_.dragY + dy);
 
-    int xo = area()->xOffset();
-    int yo = area()->yOffset();
+      int xo = area()->xOffset();
+      int yo = area()->yOffset();
 
-    this->move(this->x() + xo, this->y() + yo);
+      this->move(this->x() + xo, this->y() + yo);
+    }
+    else {
+      this->setWidth (mouseData_.dragW + dx);
+      this->setHeight(mouseData_.dragH + dy);
+
+      this->resize(this->width(), this->height());
+
+      if (! isDocked())
+        area()->placeWidgets();
+    }
   }
   else if (mouseData_.pressed) {
     pixelToText(e->pos(), mouseData_.moveLineNum, mouseData_.moveCharNum);
 
     update();
+  }
+  else {
+    const auto &margins = contentsMargins();
+
+    if      (e->x() >= width () - margins.right () - 1 &&
+             e->y() >= height() - margins.bottom() - 1) {
+      setCursor(Qt::SizeFDiagCursor);
+    }
+    else if (e->x() < margins.left() || e->x() >= width () - margins.right () - 1 ||
+             e->y() < margins.top () || e->y() >= height() - margins.bottom() - 1) {
+      if (isDocked())
+        setCursor(Qt::SizeAllCursor);
+      else
+        setCursor(Qt::ArrowCursor);
+    }
+    else {
+      setCursor(Qt::ArrowCursor);
+    }
   }
 }
 
@@ -1023,7 +1367,11 @@ void
 Widget::
 resizeEvent(QResizeEvent *)
 {
-  handleResize(width(), height());
+  // actual size
+  width_  = QFrame::width ();
+  height_ = QFrame::height();
+
+  handleResize(width_, height_);
 }
 
 void
@@ -1036,7 +1384,7 @@ drawBorder(QPainter *painter) const
 
   int l = margins.left  ();
   int t = margins.top   ();
-  int r = margins.right  ();
+  int r = margins.right ();
   int b = margins.bottom();
 
   int w = width ();
@@ -1045,8 +1393,8 @@ drawBorder(QPainter *painter) const
   painter->fillRect(QRect(0, 0, w, t), titleColor);
   painter->fillRect(QRect(0, 0, l, h), titleColor);
 
-  painter->fillRect(QRect(0, h - 1 - b, w, b), titleColor);
-  painter->fillRect(QRect(w - 1 - r, 0, r, h), titleColor);
+  painter->fillRect(QRect(0, h - b, w, b), titleColor);
+  painter->fillRect(QRect(w - r, 0, r, h), titleColor);
 }
 
 QRect
@@ -1137,7 +1485,9 @@ void
 Widget::
 closeSlot()
 {
-  // TODO
+  area_->removeWidget(this);
+
+  deleteLater();
 }
 
 void
@@ -1159,7 +1509,7 @@ Widget::
 sizeHint() const
 {
   if (! expanded_)
-    return QSize(-1, 16);
+    return QSize(-1, 20);
 
   return calcSize();
 }
@@ -1503,8 +1853,8 @@ calcSize() const
 //---
 
 TclWidget::
-TclWidget(Area *area, const QString &line, const QString &res) :
- TextWidget(area, res), line_(line)
+TclWidget(Area *area, const QString &cmd, const QString &res) :
+ TextWidget(area, res), cmd_(cmd)
 {
   setObjectName("tcl");
 }
@@ -1530,7 +1880,7 @@ rerunSlot()
 
   QString res;
 
-  if (command->runTclCommand(line_, res))
+  if (command->runTclCommand(cmd_, res))
     text_ = res;
   else
     setIsError(true);
@@ -1919,42 +2269,257 @@ bool
 CommandWidget::
 complete(const QString &line, int pos, QString &newText, CompleteMode /*completeMode*/) const
 {
-  // parse command
-  std::string              name;
-  std::vector<std::string> args;
+  int len = line.length();
 
-  parseCommand(line, name, args);
+  if (pos >= len)
+    pos = len - 1;
 
-  if ("image") {
-    std::string file = (! args.empty() ? args[0] : "");
+  //---
 
-    CFileMatch fileMatch;
+  CTclParse parse;
 
-    std::string file1 = fileMatch.mostMatchPrefix(file);
+  CTclParse::Tokens tokens;
 
-    if (file1.find(' ')) {
-      std::string file2;
+  parse.parseLine(line.toStdString(), tokens);
 
-      uint len = file1.size();
+  auto *token = parse.getTokenForPos(tokens, pos);
 
-      for (uint i = 0; i < len; ++i) {
-        if (file1[i] == ' ')
-          file2 += "\\";
+  //---
 
-        file2 += file1[i];
+  auto *frame = area()->scroll()->frame();
+
+  auto *qtcl = frame->qtcl();
+
+  //---
+
+  auto lhs = line.mid(0, token ? token->pos() : pos + 1);
+  auto str = (token ? token->str() : "");
+  auto rhs = line.mid(token ? token->endPos() + 1 : pos + 1);
+
+  // complete command
+  if      (token && token->type() == CTclToken::Type::COMMAND) {
+  //std::cerr << "Command: " << str << "\n";
+
+    const auto &cmds = qtcl->commandNames();
+
+    auto matchCmds = CQStrUtil::matchStrs(str.c_str(), cmds);
+
+    QString matchStr;
+    bool    exact = false;
+
+#if 0
+    if (interactive && matchCmds.size() > 1) {
+      matchStr = showCompletionChooser(matchCmds);
+
+      if (matchStr != "")
+        exact = true;
+    }
+#endif
+
+    //---
+
+    newText = lhs;
+
+    if (matchStr == "")
+      newText += CQStrUtil::longestMatch(matchCmds, exact);
+    else
+      newText += matchStr;
+
+    if (exact)
+      newText += " ";
+
+    newText += rhs;
+
+    return (newText.length() > line.length());
+  }
+  // complete option
+  else if (str[0] == '-') {
+    // get previous command token for command name
+    std::string command;
+
+    for (int pos1 = pos - 1; pos1 >= 0; --pos1) {
+      auto *token1 = parse.getTokenForPos(tokens, pos1);
+      if (! token1) continue;
+
+      if (token1->type() == CTclToken::Type::COMMAND) {
+        command = token1->str();
+        break;
       }
-
-      file1 = file2;
     }
 
-    newText = QString(name.c_str()) + " " + file1.c_str();
+    if (command == "")
+      return false;
 
-    return true;
+    auto option = str.substr(1);
+
+    //---
+
+    // get all options for interactive complete
+    QString matchStr;
+
+#if 0
+    if (interactive) {
+      auto cmd = QString("complete -command {%1} -option {*} -all").
+                         arg(command.c_str());
+
+      QVariant res;
+
+      (void) qtcl->eval(cmd, res);
+
+      QStringList strs = resultToStrings(res);
+
+      auto matchStrs = CQStrUtil::matchStrs(option.c_str(), strs);
+
+      if (matchStrs.size() > 1) {
+        matchStr = showCompletionChooser(matchStrs);
+
+        if (matchStr != "")
+          matchStr = "-" + matchStr + " ";
+      }
+    }
+#endif
+
+    //---
+
+    if (matchStr == "") {
+      // use complete command to complete command option
+      auto cmd = QString("complete -command {%1} -option {%2} -exact_space").
+                         arg(command.c_str()).arg(option.c_str());
+
+      QVariant res;
+
+      (void) qtcl->eval(cmd, res);
+
+      matchStr = res.toString();
+    }
+
+    newText = lhs + matchStr + rhs;
+
+    return (newText.length() > line.length());
   }
   else {
-    std::cerr << "Complete: '" << line.toStdString() << "' " << pos << "\n";
-    return false;
+    // get previous tokens for option name and command name
+    using OptionValues = std::map<std::string, std::string>;
+
+    std::string  command;
+    int          commandPos { -1 };
+    std::string  option;
+    OptionValues optionValues;
+
+    for (int pos1 = pos - 1; pos1 >= 0; --pos1) {
+      auto *token1 = parse.getTokenForPos(tokens, pos1);
+      if (! token1) continue;
+
+      const auto &str = token1->str();
+      if (str.empty()) continue;
+
+      if      (token1->type() == CTclToken::Type::COMMAND) {
+        command    = str;
+        commandPos = token1->pos();
+        break;
+      }
+      else if (str[0] == '-') {
+        if (option.empty())
+          option = str.substr(1);
+
+        if (pos1 > token1->pos())
+          pos1 = token1->pos(); // move to start
+      }
+    }
+
+    if (command == "" || option == "")
+      return false;
+
+    // get option values to next command
+    std::string lastOption;
+
+    for (int pos1 = commandPos + command.length(); pos1 < line.length(); ++pos1) {
+      auto *token1 = parse.getTokenForPos(tokens, pos1);
+      if (! token1) continue;
+
+      const auto &str = token1->str();
+      if (str.empty()) continue;
+
+      if      (token1->type() == CTclToken::Type::COMMAND) {
+        break;
+      }
+      else if (str[0] == '-') {
+        lastOption = str.substr(1);
+
+        optionValues[lastOption] = "";
+
+        pos1 = token1->pos() + token1->str().length(); // move to end
+      }
+      else {
+        if (lastOption != "")
+          optionValues[lastOption] = str;
+
+        pos1 = token1->pos() + token1->str().length(); // move to end
+      }
+    }
+
+    //---
+
+    std::string nameValues;
+
+    for (const auto &nv : optionValues) {
+      if (! nameValues.empty())
+        nameValues += " ";
+
+      nameValues += "{{" + nv.first + "} {" + nv.second + "}}";
+    }
+
+    nameValues = "{" + nameValues + "}";
+
+    //---
+
+    // get all option values for interactive complete
+    QString matchStr;
+
+#if 0
+    if (interactive) {
+      auto cmd =
+        QString("complete -command {%1} -option {%2} -value {*} -name_values %3 -all").
+                arg(command.c_str()).arg(option.c_str()).arg(nameValues.c_str());
+
+      QVariant res;
+
+      (void) qtcl->eval(cmd, res);
+
+      QStringList strs = resultToStrings(res);
+
+      auto matchStrs = CQStrUtil::matchStrs(str.c_str(), strs);
+
+      if (matchStrs.size() > 1) {
+        matchStr = showCompletionChooser(matchStrs);
+
+        if (matchStr != "")
+          matchStr = matchStr + " ";
+      }
+    }
+#endif
+
+    //---
+
+    if (matchStr == "") {
+      // use complete command to complete command option value
+      QVariant res;
+
+      auto cmd =
+        QString("complete -command {%1} -option {%2} -value {%3} -name_values %4 -exact_space").
+                arg(command.c_str()).arg(option.c_str()).arg(str.c_str()).arg(nameValues.c_str());
+
+      qtcl->eval(cmd, res);
+
+      matchStr = res.toString();
+    }
+
+    newText = lhs + matchStr + rhs;
+
+    return (newText.length() > line.length());
   }
+
+  return false;
 }
 
 void
@@ -2107,7 +2672,7 @@ keyPressEvent(QKeyEvent *event)
 
         area()->moveToEnd(this);
 
-        area()->scroll()->ensureVisible(0, area()->scroll()->getYSize());
+        area()->scrollToEnd();
 
         commands_.push_back(line);
 
@@ -2364,6 +2929,17 @@ runUnixCommand(const std::string &cmd, const Args &args, std::string &res) const
   if (cmdRc != 0)
     return false;
 
+  //---
+
+#ifdef ESCAPE_PARSER
+  EscapeParse eparse;
+
+  for (std::size_t i = 0; i < res.size(); ++i)
+    eparse.addOutputChar(res[i]);
+
+  res = eparse.str();
+#endif
+
   return true;
 }
 
@@ -2371,13 +2947,15 @@ bool
 CommandWidget::
 runTclCommand(const QString &line, QString &res) const
 {
+  auto *frame = area()->scroll()->frame();
+
+  auto *qtcl = frame->qtcl();
+
   COSExec::grabOutput();
 
   bool log = true;
 
-  auto *frame = area()->scroll()->frame();
-
-  int tclRc = frame->qtcl()->eval(line, /*showError*/true, /*showResult*/log);
+  int tclRc = qtcl->eval(line, /*showError*/true, /*showResult*/log);
 
   std::cout << std::flush;
 
@@ -2570,20 +3148,40 @@ setFile(const QString &s)
   updateImage();
 }
 
+int
+ImageWidget::
+width() const
+{
+  if (! simage_.isNull())
+    return simage_.width();
+  else
+    return image_.width();
+}
+
 void
 ImageWidget::
 setWidth(int w)
 {
-  width_ = w;
+  Widget::setWidth(w);
 
   updateImage();
+}
+
+int
+ImageWidget::
+height() const
+{
+  if (! simage_.isNull())
+    return simage_.height();
+  else
+    return image_.height();
 }
 
 void
 ImageWidget::
 setHeight(int h)
 {
-  height_ = h;
+  Widget::setHeight(h);
 
   updateImage();
 }
@@ -2592,12 +3190,12 @@ void
 ImageWidget::
 updateImage()
 {
-  if (width_ > 0 || height_ > 0) {
+  if (Widget::width() > 0 || Widget::height() > 0) {
     int width  = image_.width ();
     int height = image_.height();
 
-    if (width_  > 0) width  = width_;
-    if (height_ > 0) height = height_;
+    if (Widget::width()  > 0) width  = Widget::width();
+    if (Widget::height() > 0) height = Widget::height();
 
     simage_ = image_.scaled(width, height);
   }
@@ -2618,7 +3216,7 @@ getNameValue(const QString &name, QVariant &value) const
   else if (name == "height")
     value = (! simage_.isNull() ? simage_.height() : image_.height());
   else
-    return false;
+    return Widget::getNameValue(name, value);
 
   return true;
 }
@@ -2630,18 +3228,8 @@ setNameValue(const QString &name, const QVariant &value)
   if      (name == "file") {
     setFile(value.toString());
   }
-  else if (name == "width") {
-    bool ok;
-
-    setWidth(value.toInt(&ok));
-  }
-  else if (name == "height") {
-    bool ok;
-
-    setHeight(value.toInt(&ok));
-  }
   else
-    return false;
+    return Widget::setNameValue(name, value);
 
   return true;
 }
@@ -2693,11 +3281,14 @@ calcSize() const
 
 CanvasWidget::
 CanvasWidget(Area *area, int width, int height) :
- Widget(area), width_(width), height_(height)
+ Widget(area)
 {
   setObjectName("canvas");
 
-  displayRange_.setWindowRange(0, 0, 100, 100);
+  setWidth (width );
+  setHeight(height);
+
+  setWindowRange();
 }
 
 QString
@@ -2712,21 +3303,13 @@ CanvasWidget::
 getNameValue(const QString &name, QVariant &value) const
 {
   if      (name == "xmin" || name == "ymin" || name == "xmax" || name == "ymax") {
-    double xmin, ymin, xmax, ymax;
-
-    displayRange_.getWindowRange(&xmin, &ymin, &xmax, &ymax);
-
-    if      (name == "xmin") value = xmin;
-    else if (name == "ymin") value = ymin;
-    else if (name == "xmax") value = xmax;
-    else if (name == "ymax") value = ymax;
+    if      (name == "xmin") value = xmin();
+    else if (name == "ymin") value = ymin();
+    else if (name == "xmax") value = xmax();
+    else if (name == "ymax") value = ymax();
   }
-  else if (name == "width")
-    value = width_;
-  else if (name == "height")
-    value = height_;
   else
-    return false;
+    return Widget::getNameValue(name, value);
 
   return true;
 }
@@ -2738,24 +3321,16 @@ setNameValue(const QString &name, const QVariant &value)
   bool ok = true;
 
   if      (name == "xmin" || name == "ymin" || name == "xmax" || name == "ymax") {
-    double xmin, ymin, xmax, ymax;
-
-    displayRange_.getWindowRange(&xmin, &ymin, &xmax, &ymax);
-
-    if      (name == "xmin") xmin = value.toDouble(&ok);
-    else if (name == "ymin") ymin = value.toDouble(&ok);
-    else if (name == "xmax") xmax = value.toDouble(&ok);
-    else if (name == "ymax") ymax = value.toDouble(&ok);
+    if      (name == "xmin") setXMin(value.toDouble(&ok));
+    else if (name == "ymin") setYMin(value.toDouble(&ok));
+    else if (name == "xmax") setXMax(value.toDouble(&ok));
+    else if (name == "ymax") setYMax(value.toDouble(&ok));
 
     if (ok)
-      displayRange_.setWindowRange(xmin, ymin, xmax, ymax);
+      setWindowRange();
   }
-  else if (name == "width")
-    width_ = value.toInt(&ok);
-  else if (name == "height")
-    height_ = value.toInt(&ok);
   else
-    return false;
+    return Widget::setNameValue(name, value);
 
   if (! ok)
     return false;
@@ -2767,70 +3342,107 @@ void
 CanvasWidget::
 handleResize(int w, int h)
 {
-  displayRange_.setPixelRange(0, 0, w - 1, h - 1);
+  const auto &margins = contentsMargins();
+
+  int l = margins.left(), r = margins.right ();
+  int t = margins.top (), b = margins.bottom();
+
+  int iw = w - l - r;
+  int ih = h - t - b;
+
+  if (iw != image_.width() || ih != image_.height()) {
+    image_ = QImage(iw, ih, QImage::Format_ARGB32);
+
+    displayRange_.setPixelRange(0, 0, iw, ih);
+
+    dirty_ = true;
+  }
+}
+
+void
+CanvasWidget::
+setWindowRange()
+{
+  displayRange_.setWindowRange(xmin(), ymin(), xmax(), ymax());
+
+  dirty_ = true;
 }
 
 void
 CanvasWidget::
 draw(QPainter *painter)
 {
-  auto *frame = area()->scroll()->frame();
+  if (dirty_) {
+    ipainter_ = new QPainter;
 
-  frame->setCanvas(this);
+    ipainter_->begin(&image_);
 
-  painter_ = painter;
+    ipainter_->fillRect(QRect(0, 0, image_.width(), image_.height()), bgColor_);
 
-  painter_->setPen  (Qt::red);
-  painter_->setBrush(Qt::green);
+    auto *frame = area()->scroll()->frame();
 
-  if (drawProc_ != "") {
-    QString cmd = QString("%1 %2").arg(drawProc_).arg(id());
+    frame->setCanvas(this);
 
-    bool log = true;
+    ipainter_->setPen  (Qt::red);
+    ipainter_->setBrush(Qt::green);
 
-    (void) frame->qtcl()->eval(cmd, /*showError*/true, /*showResult*/log);
+    if (drawProc_ != "") {
+      auto *qtcl = frame->qtcl();
+
+      QString cmd = QString("%1 %2").arg(drawProc_).arg(id());
+
+      bool log = true;
+
+      (void) qtcl->eval(cmd, /*showError*/true, /*showResult*/log);
+    }
+
+    frame->setCanvas(nullptr);
+
+    ipainter_->end();
+
+    delete ipainter_;
+
+    dirty_ = false;
   }
 
-  frame->setCanvas(nullptr);
+  const auto &margins = contentsMargins();
+
+  int l = margins.left();
+  int t = margins.top ();
+
+  painter->drawImage(l, t, image_);
 }
 
 QSize
 CanvasWidget::
 calcSize() const
 {
-  const auto &margins = contentsMargins();
-
-  int xm = margins.left() + margins.right ();
-  int ym = margins.top () + margins.bottom();
-
-  //---
-
-  return QSize(width_ + xm, height_ + ym);
+  return QSize(width(), height());
 }
 
 void
 CanvasWidget::
 setBrush(const QBrush &brush)
 {
-  assert(painter_);
+  assert(ipainter_);
 
-  painter_->setBrush(brush);
+  ipainter_->setBrush(brush);
 }
 
 void
 CanvasWidget::
 setPen(const QPen &pen)
 {
-  assert(painter_);
+  assert(ipainter_);
 
-  painter_->setPen(pen);
+  ipainter_->setPen(pen);
 }
 
 void
 CanvasWidget::
 drawPath(const QString &path)
 {
-  assert(painter_);
+  assert(ipainter_);
 
   //---
 
@@ -2895,9 +3507,42 @@ drawPath(const QString &path)
     QPainterPath path_;
   };
 
-  Visitor visitor(painter_, displayRange_);
+  Visitor visitor(ipainter_, displayRange_);
 
   CSVGUtil::visitPath(path.toStdString(), visitor);
+}
+
+void
+CanvasWidget::
+drawPixel(const QPointF &p)
+{
+  assert(ipainter_);
+
+  double px, py;
+
+  if (isMapping()) {
+    windowToPixel(p.x(), p.y(), &px, &py);
+  }
+  else {
+    px = p.x();
+    py = p.y();
+  }
+
+  ipainter_->drawPoint(px, py);
+}
+
+void
+CanvasWidget::
+windowToPixel(double wx, double wy, double *px, double *py) const
+{
+  displayRange_.windowToPixel(wx, wy, px, py);
+}
+
+void
+CanvasWidget::
+pixelToWindow(double px, double py, double *wx, double *wy) const
+{
+  displayRange_.pixelToWindow(px, py, wx, wy);
 }
 
 //---
@@ -2944,6 +3589,7 @@ calcSize() const
 
 //---
 
+#ifdef MARKDOWN_DATA
 MarkdownWidget::
 MarkdownWidget(Area *area, const FileText &fileText) :
  Widget(area)
@@ -3012,6 +3658,7 @@ calcSize() const
 
   return QSize(-1, h);
 }
+#endif
 
 //---
 
@@ -3089,9 +3736,6 @@ SVGWidget(Area *area, const FileText &fileText) :
  Widget(area), fileText_(fileText)
 {
   setObjectName("svg");
-
-  auto *layout = new QVBoxLayout(this);
-  layout->setMargin(0); layout->setSpacing(0);
 }
 
 QString
@@ -3105,33 +3749,14 @@ bool
 SVGWidget::
 getNameValue(const QString &name, QVariant &value) const
 {
-  if      (name == "width")
-    value = width_;
-  else if (name == "height")
-    value = height_;
-  else
-    return false;
-
-  return true;
+  return Widget::getNameValue(name, value);
 }
 
 bool
 SVGWidget::
 setNameValue(const QString &name, const QVariant &value)
 {
-  bool ok { true };
-
-  if      (name == "width")
-    width_ = value.toInt(&ok);
-  else if (name == "height")
-    height_ = value.toInt(&ok);
-  else
-    return false;
-
-  if (! ok)
-    return false;
-
-  return true;
+  return Widget::setNameValue(name, value);
 }
 
 void
@@ -3172,11 +3797,143 @@ calcSize() const
   int width  = s.width ();
   int height = s.height();
 
-  if (width_  > 0) width  = width_;
-  if (height_ > 0) height = height_;
+  if (this->width () > 0) width  = this->width ();
+  if (this->height() > 0) height = this->height();
 
   return QSize(width, height);
 }
+
+//---
+
+#ifdef FILE_DATA
+FileWidget::
+FileWidget(Area *area, const QString &fileName) :
+ Widget(area), fileName_(fileName)
+{
+  setObjectName("file");
+
+  auto *layout = new QVBoxLayout(this);
+  layout->setMargin(0); layout->setSpacing(0);
+
+  //edit_ = new CQEdit;
+
+  //edit_->getFile()->loadLines(fileName.toStdString());
+
+  edit_ = new CQVi;
+
+  edit_->loadFile(fileName.toStdString());
+
+  layout->addWidget(edit_);
+}
+
+QString
+FileWidget::
+id() const
+{
+  return QString("file.%1").arg(pos());
+}
+
+bool
+FileWidget::
+getNameValue(const QString &name, QVariant &value) const
+{
+  return Widget::getNameValue(name, value);
+}
+
+bool
+FileWidget::
+setNameValue(const QString &name, const QVariant &value)
+{
+  return Widget::setNameValue(name, value);
+}
+
+void
+FileWidget::
+draw(QPainter *)
+{
+}
+
+QSize
+FileWidget::
+calcSize() const
+{
+  return QSize(-1, 400);
+}
+#endif
+
+//---
+
+#ifdef FILE_MGR_DATA
+FileMgrWidget::
+FileMgrWidget(Area *area) :
+ Widget(area)
+{
+  setObjectName("filemgr");
+
+  auto *layout = new QVBoxLayout(this);
+  layout->setMargin(0); layout->setSpacing(0);
+
+  fileMgr_ = new CQFileBrowser;
+
+  fileMgr_->getFileBrowser()->setShowDotDot(false);
+  fileMgr_->getFileBrowser()->setFontSize(16);
+
+  connect(fileMgr_, SIGNAL(fileActivated(const QString &)),
+          this, SLOT(fileActivated(const QString &)));
+
+  layout->addWidget(fileMgr_);
+}
+
+QString
+FileMgrWidget::
+id() const
+{
+  return QString("filemgr.%1").arg(pos());
+}
+
+bool
+FileMgrWidget::
+getNameValue(const QString &name, QVariant &value) const
+{
+  return Widget::getNameValue(name, value);
+}
+
+bool
+FileMgrWidget::
+setNameValue(const QString &name, const QVariant &value)
+{
+  return Widget::setNameValue(name, value);
+}
+
+void
+FileMgrWidget::
+draw(QPainter *)
+{
+}
+
+QSize
+FileMgrWidget::
+calcSize() const
+{
+  return QSize(-1, 400);
+}
+
+void
+FileMgrWidget::
+fileActivated(const QString &filename)
+{
+  auto name = filename.toStdString();
+
+  CFile file(name);
+
+  CFileType type = CFileUtil::getType(&file);
+
+  if (type & CFILE_TYPE_IMAGE) {
+    (void) larea()->addImageWidget(filename);
+  }
+}
+
+#endif
 
 //---
 
@@ -3220,6 +3977,234 @@ sizeHint() const
 //---
 
 void
+TclHelpCmd::
+addArgs(TclCmdArgs &argv)
+{
+  argv.addCmdArg("-hidden" , TclCmdArg::Type::Boolean, "show hidden");
+  argv.addCmdArg("-verbose", TclCmdArg::Type::Boolean, "verbose help");
+}
+
+QStringList
+TclHelpCmd::
+getArgValues(const QString &, const NameValueMap &)
+{
+  return QStringList();
+}
+
+bool
+TclHelpCmd::
+exec(TclCmdArgs &argv)
+{
+  addArgs(argv);
+
+  if (! argv.parse())
+    return false;
+
+  auto hidden  = argv.getParseBool("hidden");
+  auto verbose = argv.getParseBool("verbose");
+
+  //---
+
+  const auto &pargs = argv.getParseArgs();
+
+  QString pattern = (! pargs.empty() ? pargs[0].toString() : "");
+
+  //---
+
+  if (pattern.length())
+    frame()->help(pattern, verbose, hidden);
+  else
+    frame()->helpAll(verbose, hidden);
+
+  return true;
+}
+
+//---
+
+void
+TclCompleteCmd::
+addArgs(TclCmdArgs &argv)
+{
+  argv.addCmdArg("-command", TclCmdArg::Type::String, "complete command").setRequired();
+
+  argv.addCmdArg("-option"     , TclCmdArg::Type::String , "complete option");
+  argv.addCmdArg("-value"      , TclCmdArg::Type::String , "complete value");
+  argv.addCmdArg("-name_values", TclCmdArg::Type::String , "option name values");
+  argv.addCmdArg("-all"        , TclCmdArg::Type::Boolean, "get all matches");
+  argv.addCmdArg("-exact_space", TclCmdArg::Type::Boolean, "add space if exact");
+}
+
+QStringList
+TclCompleteCmd::
+getArgValues(const QString &, const NameValueMap &)
+{
+  return QStringList();
+}
+
+bool
+TclCompleteCmd::
+exec(TclCmdArgs &argv)
+{
+  addArgs(argv);
+
+  if (! argv.parse())
+    return false;
+
+  auto command    = argv.getParseStr ("command");
+  auto allFlag    = argv.getParseBool("all");
+  auto exactSpace = argv.getParseBool("exact_space");
+
+  //---
+
+  using NameValueMap = std::map<QString, QString>;
+
+  NameValueMap nameValueMap;
+
+  auto nameValues = argv.getParseStr("name_values");
+
+  QStringList nameValues1;
+
+  (void) CQTcl::splitList(nameValues, nameValues1);
+
+  for (const auto &nv : nameValues1) {
+    QStringList nameValues2;
+
+    (void) CQTcl::splitList(nv, nameValues2);
+
+    if (nameValues2.length() == 2)
+      nameValueMap[nameValues2[0]] = nameValues2[1];
+  }
+
+  //---
+
+  if (argv.hasParseArg("option")) {
+    // get option to complete
+    auto option = argv.getParseStr("option");
+
+    auto optionStr = "-" + option;
+
+    //---
+
+    // get proc
+    auto *proc = frame()->getTclCommand(command);
+    if (! proc) return false;
+
+    //---
+
+    // get arg info
+    Vars vars;
+
+    TclCmdArgs args(command, vars);
+
+    proc->addArgs(args);
+
+    //---
+
+    if (argv.hasParseArg("value")) {
+      // get option arg type
+      auto *arg = args.getCmdOpt(option);
+      if (! arg) return false;
+
+      auto type = arg->type();
+
+      //---
+
+      // get value to complete
+      auto value = argv.getParseStr("value");
+
+      //---
+
+      // complete by type
+      QStringList strs;
+
+      if      (type == TclCmdArg::Type::Boolean) {
+      }
+      else if (type == TclCmdArg::Type::Integer) {
+      }
+      else if (type == TclCmdArg::Type::Real) {
+      }
+      else if (type == TclCmdArg::Type::SBool) {
+        strs << "0" << "1";
+      }
+      else if (type == TclCmdArg::Type::String) {
+        strs = proc->getArgValues(option, nameValueMap);
+      }
+      else {
+        return frame()->setCmdRc(strs);
+      }
+
+      //---
+
+      if (allFlag)
+        return frame()->setCmdRc(strs);
+
+      auto matchValues = CQStrUtil::matchStrs(value, strs);
+
+      bool exact;
+
+      auto newValue = CQStrUtil::longestMatch(matchValues, exact);
+
+      if (newValue.length() >= value.length()) {
+        if (exact && exactSpace)
+          newValue += " ";
+
+        return frame()->setCmdRc(newValue);
+      }
+
+      return frame()->setCmdRc(strs);
+    }
+    else {
+      const auto &names = args.getCmdArgNames();
+
+      if (allFlag) {
+        QStringList strs;
+
+        for (const auto &name : names)
+          strs.push_back(name.mid(1));
+
+        return frame()->setCmdRc(strs);
+      }
+
+      auto matchArgs = CQStrUtil::matchStrs(optionStr, names);
+
+      bool exact;
+
+      auto newOption = CQStrUtil::longestMatch(matchArgs, exact);
+
+      if (newOption.length() >= optionStr.length()) {
+        if (exact && exactSpace)
+          newOption += " ";
+
+        return frame()->setCmdRc(newOption);
+      }
+    }
+  }
+  else {
+    const auto &cmds = frame()->qtcl()->commandNames();
+
+    auto matchCmds = CQStrUtil::matchStrs(command, cmds);
+
+    if (allFlag)
+      return frame()->setCmdRc(matchCmds);
+
+    bool exact;
+
+    auto newCommand = CQStrUtil::longestMatch(matchCmds, exact);
+
+    if (newCommand.length() >= command.length()) {
+      if (exact && exactSpace)
+        newCommand += " ";
+
+      return frame()->setCmdRc(newCommand);
+    }
+  }
+
+  return frame()->setCmdRc(QString());
+}
+
+//---
+
+void
 TclImageCmd::
 addArgs(TclCmdArgs &argv)
 {
@@ -3230,9 +4215,19 @@ addArgs(TclCmdArgs &argv)
 
 QStringList
 TclImageCmd::
-getArgValues(const QString &, const NameValueMap &)
+getArgValues(const QString &option, const NameValueMap &nameValueMap)
 {
-  return QStringList();
+  QStringList strs;
+
+  if (option == "file") {
+    auto p = nameValueMap.find("file");
+
+    QString file = (p != nameValueMap.end() ? (*p).second : "");
+
+    return completeFile(file);
+  }
+
+  return strs;
 }
 
 bool
@@ -3248,9 +4243,12 @@ exec(TclCmdArgs &argv)
 
   //---
 
-  auto fileName = argv.getParseStr("file");
+  auto *area = frame()->larea();
 
-  auto *area = frame()->lscroll()->area();
+  if (! argv.hasParseArg("file"))
+    return false;
+
+  auto fileName = argv.getParseStr("file");
 
   auto *widget = area->addImageWidget(fileName);
 
@@ -3311,10 +4309,13 @@ exec(TclCmdArgs &argv)
   if (argv.hasParseArg("height"))
     height = argv.getParseInt("height");
 
-  width  = std::max(width , 100);
-  height = std::max(height, 100);
+  int minWidth  = 100;
+  int minHeight = 100;
 
-  auto *area = frame()->lscroll()->area();
+  width  = std::max(width , minWidth );
+  height = std::max(height, minHeight);
+
+  auto *area = frame()->larea();
 
   auto *canvasWidget = area->addCanvasWidget(width, height);
 
@@ -3357,7 +4358,7 @@ exec(TclCmdArgs &argv)
 
   auto addr = argv.getParseStr("addr");
 
-  auto *area = frame()->lscroll()->area();
+  auto *area = frame()->larea();
 
   auto *widget = area->addWebWidget(addr);
 
@@ -3366,6 +4367,7 @@ exec(TclCmdArgs &argv)
 
 //---
 
+#ifdef MARKDOWN_DATA
 void
 TclMarkdownCmd::
 addArgs(TclCmdArgs &argv)
@@ -3376,9 +4378,19 @@ addArgs(TclCmdArgs &argv)
 
 QStringList
 TclMarkdownCmd::
-getArgValues(const QString &, const NameValueMap &)
+getArgValues(const QString &option, const NameValueMap &nameValueMap)
 {
-  return QStringList();
+  QStringList strs;
+
+  if (option == "file") {
+    auto p = nameValueMap.find("file");
+
+    QString file = (p != nameValueMap.end() ? (*p).second : "");
+
+    return completeFile(file);
+  }
+
+  return strs;
 }
 
 bool
@@ -3396,7 +4408,7 @@ exec(TclCmdArgs &argv)
 
   MarkdownWidget *widget = nullptr;
 
-  auto *area = frame()->lscroll()->area();
+  auto *area = frame()->larea();
 
   if      (argv.hasParseArg("file")) {
     auto file = argv.getParseStr("file");
@@ -3413,6 +4425,7 @@ exec(TclCmdArgs &argv)
 
   return frame()->setCmdRc(widget->id());
 }
+#endif
 
 //---
 
@@ -3426,9 +4439,19 @@ addArgs(TclCmdArgs &argv)
 
 QStringList
 TclHtmlCmd::
-getArgValues(const QString &, const NameValueMap &)
+getArgValues(const QString &option, const NameValueMap &nameValueMap)
 {
-  return QStringList();
+  QStringList strs;
+
+  if (option == "file") {
+    auto p = nameValueMap.find("file");
+
+    QString file = (p != nameValueMap.end() ? (*p).second : "");
+
+    return completeFile(file);
+  }
+
+  return strs;
 }
 
 bool
@@ -3446,7 +4469,7 @@ exec(TclCmdArgs &argv)
 
   HtmlWidget *widget = nullptr;
 
-  auto *area = frame()->lscroll()->area();
+  auto *area = frame()->larea();
 
   if      (argv.hasParseArg("file")) {
     auto file = argv.getParseStr("file");
@@ -3476,9 +4499,19 @@ addArgs(TclCmdArgs &argv)
 
 QStringList
 TclSVGCmd::
-getArgValues(const QString &, const NameValueMap &)
+getArgValues(const QString &option, const NameValueMap &nameValueMap)
 {
-  return QStringList();
+  QStringList strs;
+
+  if (option == "file") {
+    auto p = nameValueMap.find("file");
+
+    QString file = (p != nameValueMap.end() ? (*p).second : "");
+
+    return completeFile(file);
+  }
+
+  return strs;
 }
 
 bool
@@ -3496,7 +4529,7 @@ exec(TclCmdArgs &argv)
 
   SVGWidget *widget = nullptr;
 
-  auto *area = frame()->lscroll()->area();
+  auto *area = frame()->larea();
 
   if      (argv.hasParseArg("file")) {
     auto file = argv.getParseStr("file");
@@ -3516,6 +4549,96 @@ exec(TclCmdArgs &argv)
 
 //---
 
+#ifdef FILE_DATA
+void
+TclFileCmd::
+addArgs(TclCmdArgs &argv)
+{
+  argv.addCmdArg("-file", TclCmdArg::Type::String, "svg file");
+}
+
+QStringList
+TclFileCmd::
+getArgValues(const QString &option, const NameValueMap &nameValueMap)
+{
+  QStringList strs;
+
+  if (option == "file") {
+    auto p = nameValueMap.find("file");
+
+    QString file = (p != nameValueMap.end() ? (*p).second : "");
+
+    return completeFile(file);
+  }
+
+  return strs;
+}
+
+bool
+TclFileCmd::
+exec(TclCmdArgs &argv)
+{
+  addArgs(argv);
+
+  bool rc;
+
+  if (! argv.parse(rc))
+    return rc;
+
+  //---
+
+  FileWidget *widget = nullptr;
+
+  auto *area = frame()->larea();
+
+  auto fileName = argv.getParseStr("file");
+
+  widget = area->addFileWidget(fileName);
+
+  return frame()->setCmdRc(widget->id());
+}
+#endif
+
+//---
+
+#ifdef FILE_MGR_DATA
+void
+TclFileMgrCmd::
+addArgs(TclCmdArgs &)
+{
+}
+
+QStringList
+TclFileMgrCmd::
+getArgValues(const QString &, const NameValueMap &)
+{
+  return QStringList();
+}
+
+bool
+TclFileMgrCmd::
+exec(TclCmdArgs &argv)
+{
+  addArgs(argv);
+
+  bool rc;
+
+  if (! argv.parse(rc))
+    return rc;
+
+  //---
+
+  auto *area = frame()->larea();
+
+  auto *widget = area->addFileMgrWidget();
+
+  return frame()->setCmdRc(widget->id());
+}
+#endif
+
+//---
+
+#ifdef MODEL_DATA
 void
 TclModelCmd::
 addArgs(TclCmdArgs &argv)
@@ -3530,9 +4653,19 @@ addArgs(TclCmdArgs &argv)
 
 QStringList
 TclModelCmd::
-getArgValues(const QString &, const NameValueMap &)
+getArgValues(const QString &option, const NameValueMap &nameValueMap)
 {
-  return QStringList();
+  QStringList strs;
+
+  if (option == "file") {
+    auto p = nameValueMap.find("file");
+
+    QString file = (p != nameValueMap.end() ? (*p).second : "");
+
+    return completeFile(file);
+  }
+
+  return strs;
 }
 
 bool
@@ -3567,9 +4700,11 @@ exec(TclCmdArgs &argv)
 
   return frame()->setCmdRc(id);
 }
+#endif
 
 //---
 
+#ifdef MODEL_DATA
 void
 TclGetModelDataCmd::
 addArgs(TclCmdArgs &argv)
@@ -3641,6 +4776,7 @@ exec(TclCmdArgs &argv)
 
   return true;
 }
+#endif
 
 //---
 
@@ -3674,8 +4810,8 @@ exec(TclCmdArgs &argv)
 
   auto id = argv.getParseStr("id");
 
-  auto *larea = frame()->lscroll()->area();
-  auto *rarea = frame()->rscroll()->area();
+  auto *larea = frame()->larea();
+  auto *rarea = frame()->rarea();
 
   auto *widget = larea->getWidget(id);
 
@@ -3730,8 +4866,8 @@ exec(TclCmdArgs &argv)
 
   auto id = argv.getParseStr("id");
 
-  auto *larea = frame()->lscroll()->area();
-  auto *rarea = frame()->rscroll()->area();
+  auto *larea = frame()->larea();
+  auto *rarea = frame()->rarea();
 
   auto *widget = larea->getWidget(id);
 
@@ -3754,6 +4890,7 @@ exec(TclCmdArgs &argv)
 
 //---
 
+#ifdef MODEL_DATA
 void
 TclShowModelCmd::
 addArgs(TclCmdArgs &argv)
@@ -3820,6 +4957,7 @@ exec(TclCmdArgs &argv)
 
   return true;
 }
+#endif
 
 //---
 
@@ -3827,9 +4965,16 @@ void
 TclCanvasInstCmd::
 addArgs(TclCmdArgs &argv)
 {
-  argv.addCmdArg("-path"  , TclCmdArg::Type::String, "path");
-  argv.addCmdArg("-fill"  , TclCmdArg::Type::String, "fill");
-  argv.addCmdArg("-stroke", TclCmdArg::Type::String, "stroke");
+  argv.addCmdArg("-path"   , TclCmdArg::Type::String, "path");
+  argv.addCmdArg("-pixel"  , TclCmdArg::Type::String, "pixel");
+
+  argv.addCmdArg("-fill"   , TclCmdArg::Type::String, "fill");
+  argv.addCmdArg("-stroke" , TclCmdArg::Type::String, "stroke");
+
+  argv.addCmdArg("-mapping", TclCmdArg::Type::SBool , "mapping enabled");
+
+  argv.addCmdArg("-pixel_to_window", TclCmdArg::Type::String , "pixel to window");
+  argv.addCmdArg("-window_to_pixel", TclCmdArg::Type::String , "window to pixel");
 }
 
 QStringList
@@ -3857,80 +5002,170 @@ exec(TclCmdArgs &argv)
 
   //---
 
-  QBrush brush(Qt::SolidPattern);
+  if (argv.hasParseArg("fill")) {
+    QBrush brush(Qt::SolidPattern);
 
-  auto fill = argv.getParseStr("fill");
+    auto fill = argv.getParseStr("fill");
 
-  QStringList fillStrs;
+    QStringList fillStrs;
 
-  CQTclUtil::splitList(fill, fillStrs);
+    CQTclUtil::splitList(fill, fillStrs);
 
-  for (auto &str : fillStrs) {
-    QStringList strs;
+    for (auto &str : fillStrs) {
+      QStringList strs;
 
-    CQTclUtil::splitList(str, strs);
-    if (strs.length() != 2) continue;
+      CQTclUtil::splitList(str, strs);
+      if (strs.length() != 2) continue;
 
-    if      (strs[0] == "visible") {
-      bool ok;
+      if      (strs[0] == "visible") {
+        bool ok;
 
-      if (! stringToBool(strs[1], &ok))
-        brush.setStyle(Qt::NoBrush);
+        if (! stringToBool(strs[1], &ok))
+          brush.setStyle(Qt::NoBrush);
+      }
+      else if (strs[0] == "color") {
+        brush.setColor(QColor(strs[1]));
+      }
     }
-    else if (strs[0] == "color") {
-      brush.setColor(QColor(strs[1]));
-    }
+
+    canvas->setBrush(brush);
   }
-
-  canvas->setBrush(brush);
 
   //---
 
-  QPen pen(Qt::SolidLine);
+  if (argv.hasParseArg("stroke")) {
+    QPen pen(Qt::SolidLine);
 
-  auto stroke = argv.getParseStr("stroke");
+    auto stroke = argv.getParseStr("stroke");
 
-  QStringList strokeStrs;
+    QStringList strokeStrs;
 
-  CQTclUtil::splitList(stroke, strokeStrs);
+    CQTclUtil::splitList(stroke, strokeStrs);
 
-  for (auto &str : strokeStrs) {
-    QStringList strs;
+    for (auto &str : strokeStrs) {
+      QStringList strs;
 
-    CQTclUtil::splitList(str, strs);
-    if (strs.length() != 2) continue;
+      CQTclUtil::splitList(str, strs);
+      if (strs.length() != 2) continue;
 
-    if      (strs[0] == "visible") {
-      bool ok;
+      if      (strs[0] == "visible") {
+        bool ok;
 
-      if (! stringToBool(strs[1], &ok))
-        pen.setStyle(Qt::NoPen);
+        if (! stringToBool(strs[1], &ok))
+          pen.setStyle(Qt::NoPen);
+      }
+      else if (strs[0] == "color") {
+        pen.setColor(QColor(strs[1]));
+      }
+      else if (strs[0] == "width") {
+        bool ok;
+
+        pen.setWidthF(strs[1].toDouble(&ok));
+      }
+      else if (strs[0] == "cap") {
+        if      (strs[1] == "round")
+          pen.setCapStyle(Qt::RoundCap);
+        else if (strs[1] == "square")
+          pen.setCapStyle(Qt::SquareCap);
+        else if (strs[1] == "flat")
+          pen.setCapStyle(Qt::FlatCap);
+      }
     }
-    else if (strs[0] == "color") {
-      pen.setColor(QColor(strs[1]));
-    }
-    else if (strs[0] == "width") {
-      bool ok;
 
-      pen.setWidthF(strs[1].toDouble(&ok));
-    }
-    else if (strs[0] == "cap") {
-      if      (strs[1] == "round")
-        pen.setCapStyle(Qt::RoundCap);
-      else if (strs[1] == "square")
-        pen.setCapStyle(Qt::SquareCap);
-      else if (strs[1] == "flat")
-        pen.setCapStyle(Qt::FlatCap);
-    }
+    canvas->setPen(pen);
   }
-
-  canvas->setPen(pen);
 
   //---
 
-  auto path = argv.getParseStr("path");
+  auto argToPoint = [&](const QString &arg, QPointF &p) {
+    QStringList strs;
 
-  canvas->drawPath(path);
+    CQTclUtil::splitList(arg, strs);
+
+    if (strs.length() != 2)
+      return false;
+
+    bool ok;
+
+    double x = strs[0].toDouble(&ok);
+    if (! ok) return false;
+
+    double y = strs[1].toDouble(&ok);
+    if (! ok) return false;
+
+    p = QPointF(x, y);
+
+    return true;
+  };
+
+  //---
+
+  if (argv.hasParseArg("mapping")) {
+    auto str = argv.getParseStr("mapping");
+
+    bool ok;
+
+    if (! stringToBool(str, &ok))
+      canvas->setMapping(false);
+  }
+
+  if      (argv.hasParseArg("path")) {
+    auto path = argv.getParseStr("path");
+
+    canvas->drawPath(path);
+  }
+  else if (argv.hasParseArg("pixel")) {
+    auto arg = argv.getParseStr("pixel");
+
+    QPointF point;
+
+    if (! argToPoint(arg, point))
+      return false;
+
+    canvas->drawPixel(point);
+  }
+  else if (argv.hasParseArg("pixel_to_window")) {
+    auto arg = argv.getParseStr("pixel_to_window");
+
+    QPointF point;
+
+    if (! argToPoint(arg, point))
+      return false;
+
+    double wx, wy;
+
+    canvas->pixelToWindow(point.x(), point.y(), &wx, &wy);
+
+    QVariantList vars;
+
+    vars << QVariant(wx);
+    vars << QVariant(wy);
+
+    frame()->setCmdRc(vars);
+  }
+  else if (argv.hasParseArg("window_to_pixel")) {
+    auto arg = argv.getParseStr("window_to_pixel");
+
+    QPointF point;
+
+    if (! argToPoint(arg, point))
+      return false;
+
+    double px, py;
+
+    canvas->windowToPixel(point.x(), point.y(), &px, &py);
+
+    QVariantList vars;
+
+    vars << QVariant(px);
+    vars << QVariant(py);
+
+    frame()->setCmdRc(vars);
+  }
+
+  //---
+
+  canvas->setMapping(true);
 
   return true;
 }

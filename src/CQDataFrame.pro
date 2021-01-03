@@ -29,6 +29,7 @@ CQTrie.cpp \
 \
 CSVGUtil.cpp \
 CTclUtil.cpp \
+CTclParse.cpp \
 CFileMatch.cpp \
 
 HEADERS += \
