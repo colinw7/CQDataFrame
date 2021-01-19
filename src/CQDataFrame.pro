@@ -30,7 +30,6 @@ CQTrie.cpp \
 CSVGUtil.cpp \
 CTclUtil.cpp \
 CTclParse.cpp \
-CFileMatch.cpp \
 
 HEADERS += \
 ../include/CQDataFrame.h \
@@ -51,7 +50,6 @@ HEADERS += \
 ../include/CSVGUtil.h \
 ../include/CQTclUtil.h \
 ../include/CTclUtil.h \
-../include/CFileMatch.h \
 
 DESTDIR     = ../lib
 OBJECTS_DIR = ../obj
