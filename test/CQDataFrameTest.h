@@ -1,10 +1,6 @@
 #include <QFrame>
 
-namespace CQDataFrame {
-
-class Frame;
-
-}
+namespace CQDataFrame { class Frame; }
 
 //---
 
@@ -13,6 +9,8 @@ class CQDataFrameTest : public QFrame {
 
  public:
   CQDataFrameTest();
+
+  void addWidgets();
 
   void load(const QString &fileName);
 

@@ -7,3 +7,5 @@
 + handle escape codes in output (format text to parts ?)
 + image zoom in/out
 + more canvas commands
++ xml format for table data (CUsage)
++ add to charts

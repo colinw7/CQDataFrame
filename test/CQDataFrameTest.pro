@@ -30,7 +30,6 @@ INCLUDEPATH += \
 
 unix:LIBS += \
 -L../lib \
--L../../CQMarkdown/lib \
 -L../../CQUtil/lib \
 -L../../CCommand/lib \
 -L../../CImageLib/lib \
@@ -45,7 +44,6 @@ unix:LIBS += \
 -L../../CStrUtil/lib \
 -L../../COS/lib \
 -lCQDataFrame \
--lCQMarkdown \
 -lCQUtil \
 -lCCommand \
 -lCImageLib \
