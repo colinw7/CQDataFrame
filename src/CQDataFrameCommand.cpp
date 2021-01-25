@@ -2,16 +2,11 @@
 #include <CQDataFrame.h>
 #include <CQDataFrameHtml.h>
 #include <CQDataFrameSVG.h>
-#include <CQDataFrameEscapeParse.h>
 
-#include <CQStrParse.h>
 #include <CQStrUtil.h>
 #include <CTclParse.h>
-#include <CCommand.h>
 #include <CFile.h>
 #include <COSFile.h>
-#include <COSExec.h>
-#include <CEnv.h>
 
 #include <QPainter>
 #include <QMouseEvent>
@@ -235,35 +230,6 @@ drawText(QPainter *painter, int x, int y, const QString &text)
     painter->drawText(x, y + charData_.ascent, text[i]);
 
     x += charData_.width;
-  }
-}
-
-void
-CommandWidget::
-parseCommand(const QString &line, std::string &name, std::vector<std::string> &args) const
-{
-  assert(line.length());
-
-  CQStrParse parse(line);
-
-  parse.skipSpace();
-
-  int pos = parse.getPos();
-
-  parse.skipNonSpace();
-
-  name = parse.getBefore(pos).toStdString();
-
-  while (! parse.eof()) {
-    parse.skipSpace();
-
-    int pos = parse.getPos();
-
-    parse.skipNonSpace();
-
-    auto arg = parse.getBefore(pos);
-
-    args.push_back(arg.toStdString());
   }
 }
 
@@ -529,7 +495,7 @@ CommandWidget::
 mousePressEvent(QMouseEvent *e)
 {
   if      (e->button() == Qt::LeftButton) {
-    pixelToText(e->pos(), mouseData_.pressLineNum, mouseData_.pressCharNum);
+    (void) pixelToText(e->pos(), mouseData_.pressLineNum, mouseData_.pressCharNum);
 
     mouseData_.pressed     = true;
     mouseData_.moveLineNum = mouseData_.pressLineNum;
@@ -547,7 +513,7 @@ CommandWidget::
 mouseMoveEvent(QMouseEvent *e)
 {
   if (mouseData_.pressed) {
-    pixelToText(e->pos(), mouseData_.moveLineNum, mouseData_.moveCharNum);
+    (void) pixelToText(e->pos(), mouseData_.moveLineNum, mouseData_.moveCharNum);
 
     update();
   }
@@ -558,48 +524,36 @@ CommandWidget::
 mouseReleaseEvent(QMouseEvent *e)
 {
   if (mouseData_.pressed)
-    pixelToText(e->pos(), mouseData_.moveLineNum, mouseData_.moveCharNum);
+    (void) pixelToText(e->pos(), mouseData_.moveLineNum, mouseData_.moveCharNum);
 
   mouseData_.pressed = false;
 }
 
-void
+bool
 CommandWidget::
 pixelToText(const QPoint &p, int &lineNum, int &charNum)
 {
-  // continuation lines
+  if (Widget::pixelToText(p, lineNum, charNum))
+    return true;
+
   int numLines = lines_.size();
 
-  lineNum = -1;
-  charNum = -1;
-
-  int i { 0 }, y1 { 0 }, y2 { 0 };
-
-  for ( ; i < numLines; ++i) {
-    auto *line = lines_[i];
-
-    y1 = line->y(); // top
-    y2 = y1 + charData_.height - 1;
-
-    if (p.y() >= y1 && p.y() <= y2) {
-      lineNum = i;
-      charNum = (p.x() - line->x())/charData_.width;
-      return;
-    }
-  }
-
   // current line
-  const auto &margins = contentsMargins();
-
-  int x = margins.left();
-
-  y2 = y1 + charData_.height - 1;
+  int y1 = numLines*charData_.height;
+  int y2 = y1 + charData_.height - 1;
 
   if (p.y() >= y1 && p.y() <= y2) {
-    lineNum = i;
+    const auto &margins = contentsMargins();
+
+    int x = margins.left();
+
+    lineNum = numLines;
     charNum = (p.x() - x)/charData_.width;
-    return;
+
+    return true;
   }
+
+  return false;
 }
 
 bool
@@ -891,8 +845,7 @@ processCommand(const QString &line)
 
       area()->addWidget(unixCommand);
 
-      if (! rc)
-        unixCommand->setIsError(true);
+      unixCommand->setIsError(! rc);
     }
   }
   // run tcl command
@@ -916,84 +869,9 @@ processCommand(const QString &line)
 
       area()->addWidget(tclCommand);
 
-      if (! rc)
-        tclCommand->setIsError(true);
+      tclCommand->setIsError(! rc);
     }
   }
-}
-
-bool
-CommandWidget::
-runUnixCommand(const std::string &cmd, const Args &args, QString &res) const
-{
-  const auto &margins = contentsMargins();
-
-  int xm = margins.left() + margins.right();
-
-  //---
-
-  // set terminal columns
-  int numCols = (width() - xm)/charData_.width;
-
-  CEnvInst.set("COLUMNS", numCols);
-
-  // run command
-  CCommand command(cmd, cmd, args);
-
-  std::string res1;
-
-  command.addStringDest(res1);
-
-  command.start();
-
-  command.wait();
-
-  int cmdRc = command.getReturnCode();
-
-  if (cmdRc != 0)
-    return false;
-
-  //---
-
-#ifdef ESCAPE_PARSER
-  EscapeParse eparse;
-
-  res1 = eparse.processString(res1);
-#endif
-
-  res = QString(res1.c_str());
-
-  return true;
-}
-
-bool
-CommandWidget::
-runTclCommand(const QString &line, QString &res) const
-{
-  auto *frame = this->frame();
-
-  auto *qtcl = frame->qtcl();
-
-  COSExec::grabOutput();
-
-  bool log = true;
-
-  int tclRc = qtcl->eval(line, /*showError*/true, /*showResult*/log);
-
-  std::cout << std::flush;
-
-  std::string res1;
-
-  COSExec::readGrabbedOutput(res1);
-
-  COSExec::ungrabOutput();
-
-  res = res1.c_str();
-
-  if (tclRc != TCL_OK)
-    return false;
-
-  return true;
 }
 
 void
@@ -1032,7 +910,7 @@ selectedText() const
   QString str;
 
   for (int i = lineNum1; i <= lineNum2; ++i) {
-     QString text;
+    QString text;
 
     // continuation line
     if      (i >= 0 && i < numLines) {

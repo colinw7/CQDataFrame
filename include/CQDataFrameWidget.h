@@ -20,6 +20,9 @@ class Widget : public QFrame {
   Q_PROPERTY(int height READ height WRITE setHeight)
 
  public:
+  using Args = std::vector<std::string>;
+
+ public:
   Widget(Area *area);
 
   Area *area() const { return area_; }
@@ -37,6 +40,8 @@ class Widget : public QFrame {
   void setPos(int i) { pos_ = i; }
 
   bool isExpanded() const { return expanded_; }
+
+  bool isEditing() const { return editing_; }
 
   bool isDocked() const { return docked_; }
 
@@ -72,6 +77,14 @@ class Widget : public QFrame {
 
   virtual QSize calcSize() const = 0;
 
+  //---
+
+  bool runTclCommand(const QString &line, QString &res) const;
+
+  bool runUnixCommand(const std::string &cmd, const Args &args, QString &res) const;
+
+  void parseCommand(const QString &line, std::string &name, Args &args) const;
+
  protected:
   void setFixedFont();
 
@@ -79,8 +92,9 @@ class Widget : public QFrame {
   void contentsChanged();
 
  protected slots:
-  void setExpanded(bool b);
-  void setDocked(bool b);
+  virtual void setExpanded(bool b);
+  virtual void setEditing(bool b);
+  virtual void setDocked(bool b);
 
   void copySlot();
   void pasteSlot();
@@ -124,6 +138,8 @@ class Widget : public QFrame {
   virtual bool canMove  () const { return true; }
   virtual bool canResize() const { return true; }
 
+  virtual bool canEdit() const { return false; }
+
   virtual bool canClose() const { return true; }
 
   void contextMenuEvent(QContextMenuEvent *e) override;
@@ -132,7 +148,7 @@ class Widget : public QFrame {
   void mouseMoveEvent   (QMouseEvent *e) override;
   void mouseReleaseEvent(QMouseEvent *e) override;
 
-  void pixelToText(const QPoint &p, int &lineNum, int &charNum);
+  bool pixelToText(const QPoint &p, int &lineNum, int &charNum);
 
   void paintEvent(QPaintEvent *e) override;
 
@@ -204,6 +220,7 @@ class Widget : public QFrame {
   Area*     area_     { nullptr };
   int       pos_      { -1 };
   bool      expanded_ { true };
+  bool      editing_  { false };
   bool      docked_   { false };
   QColor    bgColor_  { 240, 240, 240 };
   QColor    fgColor_  { 0, 0, 0 };

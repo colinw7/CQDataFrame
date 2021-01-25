@@ -10,7 +10,7 @@ namespace CQDataFrame {
 
 CQDATA_FRAME_TCL_CMD(Html)
 
-// html
+// html text
 class HtmlWidget : public Widget {
   Q_OBJECT
 
@@ -31,6 +31,8 @@ class HtmlWidget : public Widget {
   FileText   fileText_;
   QTextEdit* textEdit_ { nullptr };
 };
+
+//---
 
 class HtmlFactory : public WidgetFactory {
  public:

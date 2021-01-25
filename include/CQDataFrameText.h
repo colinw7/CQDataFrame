@@ -15,6 +15,8 @@ class TextWidget : public Widget {
  public:
   TextWidget(Area *area, const QString &text="");
 
+  virtual ~TextWidget();
+
   QString id() const override;
 
   //! get/set text
@@ -23,6 +25,8 @@ class TextWidget : public Widget {
 
   QSize calcSize() const override;
 
+  QSize textSize(const QString &text) const;
+
   //! get/set is error
   bool isError() const { return isError_; }
   void setIsError(bool b) { isError_ = b; }
@@ -30,7 +34,12 @@ class TextWidget : public Widget {
  protected:
   void updateLines();
 
+  void calcLines(LineList &lines, const QString &text) const;
+  void freeLines(LineList &lines) const;
+
   void draw(QPainter *painter) override;
+
+  void drawText(QPainter *painter, int x, int &y);
 
   void drawSelectedChars(QPainter *painter, int lineNum1, int charNum1,
                          int lineNum2, int charNum2);

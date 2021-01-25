@@ -1,3 +1,5 @@
++ Named widget e.g. find src, pinned to area
+  + enable custom edit ? just command args
 + store all details in cell and allow rerun
 + vi/terminal cell (CQTty)
 + file editor (CQEdit)

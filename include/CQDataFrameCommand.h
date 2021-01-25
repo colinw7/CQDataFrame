@@ -22,10 +22,6 @@ class CommandWidget : public Widget {
 
   bool isCompleteLine(const QString &line, bool &isTcl) const;
 
-  bool runUnixCommand(const std::string &cmd, const Args &args, QString &res) const;
-
-  bool runTclCommand(const QString &line, QString &res) const;
-
   void processCommand(const QString &line);
 
   QSize calcSize() const override;
@@ -101,8 +97,6 @@ class CommandWidget : public Widget {
 
   //---
 
-  void parseCommand(const QString &line, std::string &name, Args &args) const;
-
   bool complete(const QString &text, int pos, QString &newText, CompleteMode completeMode) const;
 
   //---
@@ -125,7 +119,7 @@ class CommandWidget : public Widget {
   void mouseMoveEvent   (QMouseEvent *e) override;
   void mouseReleaseEvent(QMouseEvent *e) override;
 
-  void pixelToText(const QPoint &p, int &lineNum, int &charNum);
+  bool pixelToText(const QPoint &p, int &lineNum, int &charNum);
 
   //---
 

@@ -1,7 +1,12 @@
 #include <CQDataFrameWidget.h>
 #include <CQDataFrame.h>
+#include <CQDataFrameEscapeParse.h>
 
 #include <CQUtil.h>
+#include <CQStrParse.h>
+#include <CCommand.h>
+#include <COSExec.h>
+#include <CEnv.h>
 
 #include <QApplication>
 #include <QMenu>
@@ -33,6 +38,17 @@ setExpanded(bool b)
 {
   if (b != expanded_) {
     expanded_ = b;
+
+    area()->placeWidgets();
+  }
+}
+
+void
+Widget::
+setEditing(bool b)
+{
+  if (b != editing_) {
+    editing_ = b;
 
     area()->placeWidgets();
   }
@@ -163,6 +179,9 @@ addMenuItems(QMenu *menu)
 
   //---
 
+  if (canCollapse() || canDock() || canClose())
+  menu->addSeparator();
+
   if (canCollapse()) {
     auto *expandAction = menu->addAction("Expanded");
 
@@ -181,11 +200,22 @@ addMenuItems(QMenu *menu)
     connect(dockAction, SIGNAL(triggered(bool)), this, SLOT(setDocked(bool)));
   }
 
+  if (canEdit()) {
+    auto *editAction = menu->addAction("Edit");
+
+    editAction->setCheckable(true);
+    editAction->setChecked  (isEditing());
+
+    connect(editAction, SIGNAL(triggered(bool)), this, SLOT(setEditing(bool)));
+  }
+
   if (canClose()) {
     auto *closeAction = menu->addAction("Close");
 
     connect(closeAction, SIGNAL(triggered()), this, SLOT(closeSlot()));
   }
+
+  //---
 
   menu->addSeparator();
 
@@ -231,7 +261,7 @@ mousePressEvent(QMouseEvent *e)
       }
     }
 
-    pixelToText(e->pos(), mouseData_.pressLineNum, mouseData_.pressCharNum);
+    (void) pixelToText(e->pos(), mouseData_.pressLineNum, mouseData_.pressCharNum);
 
     mouseData_.pressed     = true;
     mouseData_.moveLineNum = mouseData_.pressLineNum;
@@ -277,7 +307,7 @@ mouseMoveEvent(QMouseEvent *e)
     }
   }
   else if (mouseData_.pressed) {
-    pixelToText(e->pos(), mouseData_.moveLineNum, mouseData_.moveCharNum);
+    (void) pixelToText(e->pos(), mouseData_.moveLineNum, mouseData_.moveCharNum);
 
     update();
   }
@@ -306,12 +336,12 @@ Widget::
 mouseReleaseEvent(QMouseEvent *e)
 {
   if (mouseData_.pressed)
-    pixelToText(e->pos(), mouseData_.moveLineNum, mouseData_.moveCharNum);
+    (void) pixelToText(e->pos(), mouseData_.moveLineNum, mouseData_.moveCharNum);
 
   mouseData_.reset();
 }
 
-void
+bool
 Widget::
 pixelToText(const QPoint &p, int &lineNum, int &charNum)
 {
@@ -332,9 +362,12 @@ pixelToText(const QPoint &p, int &lineNum, int &charNum)
     if (p.y() >= y1 && p.y() <= y2) {
       lineNum = i;
       charNum = (p.x() - line->x())/charData_.width;
-      return;
+
+      return true;
     }
   }
+
+  return false;
 }
 
 void
@@ -503,6 +536,115 @@ sizeHint() const
     return QSize(-1, 20);
 
   return calcSize();
+}
+
+//---
+
+bool
+Widget::
+runTclCommand(const QString &line, QString &res) const
+{
+  auto *frame = this->frame();
+
+  auto *qtcl = frame->qtcl();
+
+  COSExec::grabOutput();
+
+  bool log = true;
+
+  int tclRc = qtcl->eval(line, /*showError*/true, /*showResult*/log);
+
+  std::cout << std::flush;
+
+  std::string res1;
+
+  COSExec::readGrabbedOutput(res1);
+
+  COSExec::ungrabOutput();
+
+  res = res1.c_str();
+
+  if (tclRc != TCL_OK)
+    return false;
+
+  return true;
+}
+
+//---
+
+bool
+Widget::
+runUnixCommand(const std::string &cmd, const Args &args, QString &res) const
+{
+  const auto &margins = contentsMargins();
+
+  int xm = margins.left() + margins.right();
+
+  //---
+
+  // set terminal columns
+  int numCols = (width() - xm)/charData_.width;
+
+  CEnvInst.set("COLUMNS", numCols);
+
+  // run command
+  CCommand command(cmd, cmd, args);
+
+  std::string res1;
+
+  command.addStringDest(res1);
+
+  command.start();
+
+  command.wait();
+
+  int cmdRc = command.getReturnCode();
+
+  if (cmdRc != 0)
+    return false;
+
+  //---
+
+#ifdef ESCAPE_PARSER
+  EscapeParse eparse;
+
+  res1 = eparse.processString(res1);
+#endif
+
+  res = QString(res1.c_str());
+
+  return true;
+}
+
+//---
+
+void
+Widget::
+parseCommand(const QString &line, std::string &name, std::vector<std::string> &args) const
+{
+  assert(line.length());
+
+  CQStrParse parse(line);
+
+  parse.skipSpace();
+
+  int pos = parse.getPos();
+
+  parse.skipNonSpace();
+
+  name = parse.getBefore(pos).toStdString();
+
+  while (! parse.eof()) {
+    parse.skipSpace();
+
+    int pos = parse.getPos();
+
+    parse.skipNonSpace();
+
+    auto arg = parse.getBefore(pos);
+
+    args.push_back(arg.toStdString());
+  }
 }
 
 }

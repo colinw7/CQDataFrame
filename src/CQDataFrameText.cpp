@@ -19,6 +19,12 @@ TextWidget(Area *area, const QString &text) :
   updateLines();
 }
 
+TextWidget::
+~TextWidget()
+{
+  freeLines(lines_);
+}
+
 QString
 TextWidget::
 id() const
@@ -39,14 +45,16 @@ void
 TextWidget::
 updateLines()
 {
-  for (auto &line : lines_)
-    delete line;
+  calcLines(lines_, text());
+}
 
-  lines_.clear();
+void
+TextWidget::
+calcLines(LineList &lines, const QString &text) const
+{
+  freeLines(lines);
 
   //---
-
-  const auto &text = this->text();
 
   int len = text.length();
 
@@ -54,7 +62,7 @@ updateLines()
 
   for (int i = 0; i < len; ++i) {
     if (text[i] == '\n') {
-      lines_.push_back(new Line(s));
+      lines.push_back(new Line(s));
 
       s = "";
     }
@@ -63,7 +71,17 @@ updateLines()
   }
 
   if (s.length())
-    lines_.push_back(new Line(s));
+    lines.push_back(new Line(s));
+}
+
+void
+TextWidget::
+freeLines(LineList &lines) const
+{
+  for (auto &line : lines)
+    delete line;
+
+  lines.clear();
 }
 
 void
@@ -82,6 +100,13 @@ draw(QPainter *painter)
 
   //---
 
+  drawText(painter, x, y);
+}
+
+void
+TextWidget::
+drawText(QPainter *painter, int x, int &y)
+{
   // draw lines
   painter->setPen(fgColor_);
 
@@ -89,7 +114,7 @@ draw(QPainter *painter)
     line->setX(x);
     line->setY(y);
 
-    drawText(painter, x, y, line->text());
+    Widget::drawText(painter, x, y, line->text());
 
     y += charData_.height;
   }
@@ -150,7 +175,7 @@ drawSelectedChars(QPainter *painter, int lineNum1, int charNum1, int lineNum2, i
 
       painter->fillRect(QRect(tx1, ty, charData_.width, charData_.height), selColor_);
 
-      drawText(painter, tx1, ty, text.mid(j, 1));
+      Widget::drawText(painter, tx1, ty, text.mid(j, 1));
     }
   }
 }
@@ -189,6 +214,8 @@ selectedText() const
     auto *line = lines_[i];
 
     const auto &text = line->text();
+
+    //---
 
     if (str.length() > 0)
       str += "\n";
@@ -229,6 +256,15 @@ calcSize() const
 
   const auto &text = this->text();
 
+  QSize size = textSize(text);
+
+  return QSize(size.width() + xm, size.height() + ym);
+}
+
+QSize
+TextWidget::
+textSize(const QString &text) const
+{
   int len = text.length();
 
   int maxWidth     = 0;
@@ -251,7 +287,7 @@ calcSize() const
   if (currentWidth > 0)
     ++numLines;
 
-  return QSize(maxWidth*charData_.width + xm, numLines*charData_.height + ym);
+  return QSize(maxWidth*charData_.width, numLines*charData_.height);
 }
 
 }
