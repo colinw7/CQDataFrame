@@ -14,8 +14,8 @@ CanvasWidget(Area *area, int width, int height) :
 {
   setObjectName("canvas");
 
-  setWidth (width );
-  setHeight(height);
+  setContentsWidth (width );
+  setContentsHeight(height);
 
   setWindowRange();
 }
@@ -25,6 +25,24 @@ CanvasWidget::
 id() const
 {
   return QString("canvas.%1").arg(pos());
+}
+
+void
+CanvasWidget::
+setContentsWidth(int w)
+{
+  Widget::setContentsWidth(w);
+
+  updateSize();
+}
+
+void
+CanvasWidget::
+setContentsHeight(int h)
+{
+  Widget::setContentsHeight(h);
+
+  updateSize();
 }
 
 bool
@@ -69,15 +87,10 @@ setNameValue(const QString &name, const QVariant &value)
 
 void
 CanvasWidget::
-handleResize(int w, int h)
+updateSize()
 {
-  const auto &margins = contentsMargins();
-
-  int l = margins.left(), r = margins.right ();
-  int t = margins.top (), b = margins.bottom();
-
-  int iw = w - l - r;
-  int ih = h - t - b;
+  int iw = contentsWidth ();
+  int ih = contentsHeight();
 
   if (iw != image_.width() || ih != image_.height()) {
     image_ = QImage(iw, ih, QImage::Format_ARGB32);
@@ -99,8 +112,11 @@ setWindowRange()
 
 void
 CanvasWidget::
-draw(QPainter *painter)
+draw(QPainter *painter, int dx, int dy)
 {
+  if (image_.width() <= 0 || image_.height() <= 0)
+    return;
+
   if (dirty_) {
     ipainter_ = new QPainter;
 
@@ -134,17 +150,19 @@ draw(QPainter *painter)
     dirty_ = false;
   }
 
-  const auto &margins = contentsMargins();
-
-  int l = margins.left();
-  int t = margins.top ();
-
-  painter->drawImage(l, t, image_);
+  painter->drawImage(dx, dy, image_);
 }
 
 QSize
 CanvasWidget::
-calcSize() const
+contentsSizeHint() const
+{
+  return QSize(-1, 400);
+}
+
+QSize
+CanvasWidget::
+contentsSize() const
 {
   return QSize(width(), height());
 }
@@ -324,9 +342,7 @@ exec(CQTclCmd::CmdArgs &argv)
 
   //---
 
-  auto *canvasWidget = new CanvasWidget(area, width, height);
-
-  area->addWidget(canvasWidget);
+  auto *canvasWidget = makeWidget<CanvasWidget>(area, width, height);
 
   auto *cmd = new CanvasInstTclCmd(frame_, canvasWidget->id());
 
@@ -338,8 +354,6 @@ exec(CQTclCmd::CmdArgs &argv)
     canvasWidget->setDrawProc(argv.getParseStr("proc"));
 
   return frame_->setCmdRc(canvasWidget->id());
-
-  return true;
 }
 
 //------

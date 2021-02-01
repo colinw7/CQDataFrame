@@ -2,6 +2,7 @@
 #define CQDataFrameCanvas_H
 
 #include <CQDataFrame.h>
+#include <CQDataFrameWidget.h>
 #include <CDisplayRange2D.h>
 
 namespace CQDataFrame {
@@ -19,6 +20,13 @@ class CanvasWidget : public Widget {
 
   QString id() const override;
 
+  //! set custom width
+  void setContentsWidth(int w) override;
+
+  //! set custom height
+  void setContentsHeight(int h) override;
+
+  //! get/set name value
   bool getNameValue(const QString &name, QVariant &value) const override;
   bool setNameValue(const QString &name, const QVariant &value) override;
 
@@ -42,7 +50,8 @@ class CanvasWidget : public Widget {
   double ymax() const { return ymax_; }
   void setYMax(double r) { ymax_ = r; }
 
-  QSize calcSize() const override;
+  QSize contentsSizeHint() const override;
+  QSize contentsSize() const override;
 
   void setBrush(const QBrush &brush);
 
@@ -59,11 +68,11 @@ class CanvasWidget : public Widget {
   void pixelToWindow(double px, double py, double *wx, double *wy) const;
 
  private:
-  void handleResize(int w, int h) override;
+  void updateSize();
 
   void setWindowRange();
 
-  void draw(QPainter *painter) override;
+  void draw(QPainter *painter, int dx, int dy) override;
 
  private:
   using DisplayRange = CDisplayRange2D;
@@ -91,11 +100,7 @@ class CanvasFactory : public WidgetFactory {
   }
 
   Widget *addWidget(Area *area) override {
-    auto *widget = new CanvasWidget(area);
-
-    area->addWidget(widget);
-
-    return widget;
+    return makeWidget<CanvasWidget>(area);
   }
 };
 

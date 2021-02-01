@@ -4,6 +4,7 @@
 #ifdef FILE_MGR_DATA
 
 #include <CQDataFrame.h>
+#include <CQDataFrameWidget.h>
 
 class CQFileBrowser;
 
@@ -21,15 +22,18 @@ class FileMgrWidget : public Widget {
  public:
   FileMgrWidget(Area *area);
 
+  void addWidgets() override;
+
   QString id() const override;
 
   bool getNameValue(const QString &name, QVariant &value) const override;
   bool setNameValue(const QString &name, const QVariant &value) override;
 
-  QSize calcSize() const override;
+  QSize contentsSizeHint() const override;
+  QSize contentsSize() const override;
 
  private:
-  void draw(QPainter *painter) override;
+  void draw(QPainter *painter, int dx, int dy) override;
 
  private slots:
   void fileActivated(const QString &filename);
@@ -49,11 +53,7 @@ class FileMgrFactory : public WidgetFactory {
   }
 
   Widget *addWidget(Area *area) override {
-    auto *widget = new FileMgrWidget(area);
-
-    area->addWidget(widget);
-
-    return widget;
+    return makeWidget<FileMgrWidget>(area);
   }
 };
 

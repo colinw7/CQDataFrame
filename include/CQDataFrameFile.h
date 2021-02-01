@@ -4,6 +4,7 @@
 #ifdef FILE_DATA
 
 #include <CQDataFrame.h>
+#include <CQDataFrameWidget.h>
 
 //class CQEdit;
 class CQVi;
@@ -22,6 +23,8 @@ class FileWidget : public Widget {
  public:
   FileWidget(Area *area, const QString &fileName="");
 
+  void addWidgets() override;
+
   QString id() const override;
 
   const QString &fileName() const { return fileName_; }
@@ -29,10 +32,11 @@ class FileWidget : public Widget {
   bool getNameValue(const QString &name, QVariant &value) const override;
   bool setNameValue(const QString &name, const QVariant &value) override;
 
-  QSize calcSize() const override;
+  QSize contentsSizeHint() const override;
+  QSize contentsSize() const override;
 
  private:
-  void draw(QPainter *painter) override;
+  void draw(QPainter *painter, int dx, int dy) override;
 
  private:
   QString fileName_;
@@ -51,11 +55,7 @@ class FileFactory : public WidgetFactory {
   }
 
   Widget *addWidget(Area *area) override {
-    auto *widget = new FileWidget(area);
-
-    area->addWidget(widget);
-
-    return widget;
+    return makeWidget<FileWidget>(area);
   }
 };
 

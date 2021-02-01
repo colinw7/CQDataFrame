@@ -2,6 +2,7 @@
 #define CQDataFrameWeb_H
 
 #include <CQDataFrame.h>
+#include <CQDataFrameWidget.h>
 
 class QWebView;
 
@@ -16,12 +17,15 @@ class WebWidget : public Widget {
  public:
   WebWidget(Area *area, const QString &addr="");
 
+  void addWidgets() override;
+
   QString id() const override;
 
-  QSize calcSize() const override;
+  QSize contentsSizeHint() const override;
+  QSize contentsSize() const override;
 
  private:
-  void draw(QPainter *painter) override;
+  void draw(QPainter *painter, int dx, int dy) override;
 
  private:
   QString addr_;
@@ -44,11 +48,7 @@ class WebFactory : public WidgetFactory {
   }
 
   Widget *addWidget(Area *area) override {
-    auto *widget = new WebWidget(area);
-
-    area->addWidget(widget);
-
-    return widget;
+    return makeWidget<WebWidget>(area);
   }
 };
 

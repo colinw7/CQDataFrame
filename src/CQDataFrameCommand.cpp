@@ -1,4 +1,6 @@
 #include <CQDataFrameCommand.h>
+#include <CQDataFrameTcl.h>
+#include <CQDataFrameUnix.h>
 #include <CQDataFrame.h>
 #include <CQDataFrameHtml.h>
 #include <CQDataFrameSVG.h>
@@ -37,12 +39,10 @@ id() const
 
 void
 CommandWidget::
-draw(QPainter *painter)
+draw(QPainter *painter, int dx, int dy)
 {
-  const auto &margins = contentsMargins();
-
-  int x = margins.left();
-  int y = margins.top ();
+  int x = dx;
+  int y = dy;
 
   //---
 
@@ -139,9 +139,7 @@ void
 CommandWidget::
 drawLine(QPainter *painter, Line *line, int y)
 {
-  const auto &margins = contentsMargins();
-
-  int x = margins.left();
+  int x = 0;
 
   //---
 
@@ -160,9 +158,7 @@ void
 CommandWidget::
 drawSelectedChars(QPainter *painter, int lineNum1, int charNum1, int lineNum2, int charNum2)
 {
-  const auto &margins = contentsMargins();
-
-  int x = margins.left();
+  int x = 0;
 
   //---
 
@@ -543,9 +539,7 @@ pixelToText(const QPoint &p, int &lineNum, int &charNum)
   int y2 = y1 + charData_.height - 1;
 
   if (p.y() >= y1 && p.y() <= y2) {
-    const auto &margins = contentsMargins();
-
-    int x = margins.left();
+    int x = 0;
 
     lineNum = numLines;
     charNum = (p.x() - x)/charData_.width;
@@ -666,7 +660,7 @@ keyPressEvent(QKeyEvent *event)
 
       clearEntry();
 
-      area()->placeWidgets();
+      placeWidgets();
     }
 
     setFocus();
@@ -787,6 +781,8 @@ void
 CommandWidget::
 processCommand(const QString &line)
 {
+  auto tline = line.trimmed();
+
   // parse command
   std::string name;
   Args        args;
@@ -806,71 +802,90 @@ processCommand(const QString &line)
     else
       path = "~";
 
-    std::string path1;
-
-    if (CFile::expandTilde(path, path1))
-      path = path1;
-
-    if (COSFile::changeDir(path))
-      this->frame()->status()->update();
-    else {
-      QString res = "Failed to change directory";
-
-      auto *text = area()->addTextWidget(res);
-
-      text->setIsError(true);
-    }
+    processCdCommand(path.c_str());
   }
-  // run unix command
+  // process unix command
   else if (name[0] == '!') {
     // run command
     auto cmd = name.substr(1);
 
-    QString res;
-
-    bool rc = runUnixCommand(cmd, args, res);
-
-    if      (rc && res.startsWith("<html>")) {
-      auto *widget = new HtmlWidget(area(), FileText(FileText::Type::TEXT, res));
-
-      area()->addWidget(widget);
-    }
-    else if (rc && res.startsWith("<svg>")) {
-      auto *widget = new SVGWidget(area(), FileText(FileText::Type::TEXT, res));
-
-      area()->addWidget(widget);
-    }
-    else {
-      auto *unixCommand = new UnixWidget(area(), cmd.c_str(), args, res);
-
-      area()->addWidget(unixCommand);
-
-      unixCommand->setIsError(! rc);
-    }
+    processUnixCommand(cmd.c_str(), args);
   }
-  // run tcl command
+  // process tcl expr
+  else if (tline[0] == '%') {
+    auto cmd = tline.mid(1);
+
+    processTclCommand(cmd, /*expr*/true);
+  }
+  // process tcl command
   else {
-    QString res;
+    processTclCommand(line, /*expr*/false);
+  }
+}
 
-    bool rc = runTclCommand(line, res);
+void
+CommandWidget::
+processCdCommand(const QString &path)
+{
+  auto path1 = path;
 
-    if      (rc && res.startsWith("<html>")) {
-      auto *widget = new HtmlWidget(area(), FileText(FileText::Type::TEXT, res));
+  std::string path2;
 
-      area()->addWidget(widget);
-    }
-    else if (rc && res.startsWith("<svg>")) {
-      auto *widget = new SVGWidget(area(), FileText(FileText::Type::TEXT, res));
+  if (CFile::expandTilde(path.toStdString(), path2))
+    path1 = path2.c_str();
 
-      area()->addWidget(widget);
-    }
-    else {
-      auto *tclCommand = new TclWidget(area(), line, res);
+  if (COSFile::changeDir(path1.toStdString()))
+    this->frame()->status()->update();
+  else {
+    QString res = "Failed to change directory";
 
-      area()->addWidget(tclCommand);
+    auto *text = area()->addTextWidget(res);
 
-      tclCommand->setIsError(! rc);
-    }
+    text->setIsError(true);
+  }
+}
+
+void
+CommandWidget::
+processUnixCommand(const QString &cmd, const Args &args)
+{
+  QString res;
+
+  bool rc = runUnixCommand(cmd.toStdString(), args, res);
+
+  if      (rc && res.startsWith("<html>")) {
+    (void) makeWidget<HtmlWidget>(area(), FileText(FileText::Type::TEXT, res));
+  }
+  else if (rc && res.startsWith("<svg>")) {
+    (void) makeWidget<SVGWidget>(area(), FileText(FileText::Type::TEXT, res));
+  }
+  else {
+    auto *widget = makeWidget<UnixWidget>(area(), cmd, args, res);
+
+    widget->setIsError(! rc);
+  }
+}
+
+void
+CommandWidget::
+processTclCommand(const QString &cmd, bool expr)
+{
+  auto cmd1 = (expr ? "expr {" + cmd + "}" : cmd);
+
+  QString res;
+
+  bool rc = runTclCommand(cmd1, res);
+
+  if      (rc && res.startsWith("<html>")) {
+    (void) makeWidget<HtmlWidget>(area(), FileText(FileText::Type::TEXT, res));
+  }
+  else if (rc && res.startsWith("<svg>")) {
+    (void) makeWidget<SVGWidget>(area(), FileText(FileText::Type::TEXT, res));
+  }
+  else {
+    auto *widget = makeWidget<TclWidget>(area(), cmd, expr, res);
+
+    widget->setIsError(! rc);
   }
 }
 
@@ -1003,21 +1018,30 @@ clearText()
 
 QSize
 CommandWidget::
-calcSize() const
+contentsSizeHint() const
 {
-  const auto &margins = contentsMargins();
+  int h = charData_.height;
 
-  int ym = margins.top() + margins.bottom();
+  int numLines = lines_.size();
 
-  //---
+  numLines = std::min(numLines, 25);
 
+  h += numLines*charData_.height;
+
+  return QSize(-1, h);
+}
+
+QSize
+CommandWidget::
+contentsSize() const
+{
   int h = charData_.height;
 
   int numLines = lines_.size();
 
   h += numLines*charData_.height;
 
-  return QSize(-1, h + ym);
+  return QSize(-1, h);
 }
 
 }

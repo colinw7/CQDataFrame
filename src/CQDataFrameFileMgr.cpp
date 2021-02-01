@@ -33,8 +33,13 @@ FileMgrWidget(Area *area) :
   s_init();
 
   setObjectName("filemgr");
+}
 
-  auto *layout = new QVBoxLayout(this);
+void
+FileMgrWidget::
+addWidgets()
+{
+  auto *layout = new QVBoxLayout(contents_);
   layout->setMargin(0); layout->setSpacing(0);
 
   fileMgr_ = new CQFileBrowser;
@@ -71,15 +76,22 @@ setNameValue(const QString &name, const QVariant &value)
 
 void
 FileMgrWidget::
-draw(QPainter *)
+draw(QPainter *, int /*dx*/, int /*dy*/)
 {
 }
 
 QSize
 FileMgrWidget::
-calcSize() const
+contentsSizeHint() const
 {
   return QSize(-1, 400);
+}
+
+QSize
+FileMgrWidget::
+contentsSize() const
+{
+  return QSize(width_, height_);
 }
 
 void
@@ -136,9 +148,7 @@ exec(CQTclCmd::CmdArgs &argv)
 
   auto *area = frame_->larea();
 
-  auto *widget = new FileMgrWidget(area);
-
-  area->addWidget(widget);
+  auto *widget = makeWidget<FileMgrWidget>(area);
 
   return frame_->setCmdRc(widget->id());
 }

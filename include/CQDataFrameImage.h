@@ -2,6 +2,7 @@
 #define CQDataFrameImage_H
 
 #include <CQDataFrame.h>
+#include <CQDataFrameWidget.h>
 
 namespace CQDataFrame {
 
@@ -23,30 +24,43 @@ class ImageWidget : public Widget {
   void setFile(const QString &s);
 
   //! get/set custom width
-  int width() const override;
-  void setWidth (int w) override;
+  int contentsWidth() const override;
+  void setContentsWidth(int w) override;
 
   //! get/set custom height
-  int height() const override;
-  void setHeight(int h) override;
+  int contentsHeight() const override;
+  void setContentsHeight(int h) override;
 
+  //! get/set name value
   bool getNameValue(const QString &name, QVariant &value) const override;
   bool setNameValue(const QString &name, const QVariant &value) override;
 
   void pasteText(const QString &) override;
 
-  QSize calcSize() const override;
+  void addMenuItems(QMenu *menu) override;
+
+  QSize contentsSizeHint() const override;
+  QSize contentsSize() const override;
+
+ private slots:
+  void zoomInSlot();
+  void zoomOutSlot();
+  void resetSlot();
 
  private:
   void updateImage();
 
-  void draw(QPainter *painter) override;
+  void draw(QPainter *painter, int dx, int dy) override;
 
  private:
   QString file_;
   QImage  image_;
   QImage  simage_;
+  double  xscale_ { 1.0 };
+  double  yscale_ { 1.0 };
 };
+
+//---
 
 class ImageFactory : public WidgetFactory {
  public:
@@ -59,11 +73,7 @@ class ImageFactory : public WidgetFactory {
   }
 
   Widget *addWidget(Area *area) override {
-    auto *widget = new ImageWidget(area);
-
-    area->addWidget(widget);
-
-    return widget;
+    return makeWidget<ImageWidget>(area);
   }
 };
 

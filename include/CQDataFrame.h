@@ -101,6 +101,8 @@ class Frame : public QFrame {
 
   //---
 
+  QSize sizeHint() const override;
+
  private:
   using WidgetFactories = std::map<QString, WidgetFactory *>;
 
@@ -162,6 +164,9 @@ class Area : public QFrame {
 
   CommandWidget *commandWidget() const;
 
+  int margin() const { return margin_; }
+  void setMargin(int margin) { margin_ = margin; }
+
   //---
 
   TextWidget    *addTextWidget   (const QString &text);
@@ -217,9 +222,11 @@ class Status : public QFrame {
  public:
   Status(Frame *frame);
 
-  void paintEvent(QPaintEvent *);
+  int margin() const { return margin_; }
 
-  QSize sizeHint() const;
+  void paintEvent(QPaintEvent *) override;
+
+  QSize sizeHint() const override;
 
  private:
   Frame* frame_  { nullptr };
@@ -243,15 +250,17 @@ class WidgetFactory {
   virtual Widget *addWidget(Area *area) = 0;
 };
 
+//---
+
+template <typename T, typename... TArg>
+static T *makeWidget(Area *area, TArg&&... Args) {
+  auto *widget = new T(area, std::forward<TArg>(Args)...);
+  widget->init();
+  area->addWidget(widget);
+  return widget;
 }
 
-//------
-
-#include <CQDataFrameWidget.h>
-#include <CQDataFrameUnix.h>
-#include <CQDataFrameTcl.h>
-#include <CQDataFrameHistory.h>
-#include <CQDataFrameCommand.h>
+}
 
 //------
 

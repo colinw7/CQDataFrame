@@ -12,11 +12,16 @@ namespace CQDataFrame {
 
 MarkdownWidget::
 MarkdownWidget(Area *area, const FileText &fileText) :
- Widget(area)
+ Widget(area), fileText_(fileText)
 {
   setObjectName("markdown");
+}
 
-  auto *layout = new QVBoxLayout(this);
+void
+MarkdownWidget::
+addWidgets()
+{
+  auto *layout = new QVBoxLayout(contents_);
   layout->setMargin(0); layout->setSpacing(0);
 
   textEdit_ = new QTextEdit;
@@ -26,7 +31,7 @@ MarkdownWidget(Area *area, const FileText &fileText) :
 
   layout->addWidget(textEdit_);
 
-  setFileText(fileText);
+  setFileText(fileText_);
 }
 
 QString
@@ -63,13 +68,29 @@ setFileText(const FileText &fileText)
 
 void
 MarkdownWidget::
-draw(QPainter *)
+setExpanded(bool b)
+{
+  textEdit_->setVisible(b);
+
+  Widget::setExpanded(b);
+}
+
+void
+MarkdownWidget::
+draw(QPainter *, int /*dx*/, int /*dy*/)
 {
 }
 
 QSize
 MarkdownWidget::
-calcSize() const
+contentsSizeHint() const
+{
+  return QSize(-1, 400);
+}
+
+QSize
+MarkdownWidget::
+contentsSize() const
 {
   auto *doc    = textEdit_->document();
   auto *layout = doc->documentLayout();
@@ -126,16 +147,12 @@ exec(CQTclCmd::CmdArgs &argv)
   if      (argv.hasParseArg("file")) {
     auto file = argv.getParseStr("file");
 
-    widget = new MarkdownWidget(area, FileText(FileText::Type::FILENAME, file));
-
-    area->addWidget(widget);
+    widget = makeWidget<MarkdownWidget>(area, FileText(FileText::Type::FILENAME, file));
   }
   else if (argv.hasParseArg("text")) {
     auto text = argv.getParseStr("text");
 
-    widget = new MarkdownWidget(area, FileText(FileText::Type::TEXT, text));
-
-    area->addWidget(widget);
+    widget = makeWidget<MarkdownWidget>(area, FileText(FileText::Type::TEXT, text));
   }
   else
     return false;

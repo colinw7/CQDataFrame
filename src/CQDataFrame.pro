@@ -24,7 +24,6 @@ CQDataFrameHistory.cpp \
 CQDataFrameHtml.cpp \
 CQDataFrameImage.cpp \
 CQDataFrameMarkdown.cpp \
-CQDataFrameModel.cpp \
 CQDataFrameSVG.cpp \
 CQDataFrameTclCmd.cpp \
 CQDataFrameTcl.cpp \
@@ -32,16 +31,6 @@ CQDataFrameText.cpp \
 CQDataFrameUnix.cpp \
 CQDataFrameWeb.cpp \
 CQDataFrameWidget.cpp \
-\
-CQCsvModel.cpp \
-CQDataModel.cpp \
-CQBaseModel.cpp \
-CQModelDetails.cpp \
-CQModelVisitor.cpp \
-CQModelUtil.cpp \
-CQModelNameValues.cpp \
-CQValueSet.cpp \
-CQTrie.cpp \
 \
 CSVGUtil.cpp \
 CQTclCmd.cpp \
@@ -60,7 +49,6 @@ HEADERS += \
 ../include/CQDataFrameHtml.h \
 ../include/CQDataFrameImage.h \
 ../include/CQDataFrameMarkdown.h \
-../include/CQDataFrameModel.h \
 ../include/CQDataFrameSVG.h \
 ../include/CQDataFrameTclCmd.h \
 ../include/CQDataFrameTcl.h \
@@ -68,19 +56,6 @@ HEADERS += \
 ../include/CQDataFrameUnix.h \
 ../include/CQDataFrameWeb.h \
 ../include/CQDataFrameWidget.h \
-\
-../include/CQCsvModel.h \
-../include/CQDataModel.h \
-../include/CQBaseModel.h \
-../include/CQModelDetails.h \
-../include/CQModelVisitor.h \
-../include/CQModelUtil.h \
-../include/CQModelNameValues.h \
-../include/CQValueSet.h \
-../include/CQTrie.h \
-\
-../include/CQBaseModelTypes.h \
-../include/CQStatData.h \
 \
 ../include/CSVGUtil.h \
 ../include/CQTclCmd.h \

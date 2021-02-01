@@ -26,8 +26,13 @@ FileWidget(Area *area, const QString &fileName) :
  Widget(area), fileName_(fileName)
 {
   setObjectName("file");
+}
 
-  auto *layout = new QVBoxLayout(this);
+void
+FileWidget::
+addWidgets()
+{
+  auto *layout = new QVBoxLayout(contents_);
   layout->setMargin(0); layout->setSpacing(0);
 
   //edit_ = new CQEdit;
@@ -36,7 +41,7 @@ FileWidget(Area *area, const QString &fileName) :
 
   edit_ = new CQVi;
 
-  edit_->loadFile(fileName.toStdString());
+  edit_->loadFile(fileName_.toStdString());
 
   layout->addWidget(edit_);
 }
@@ -64,15 +69,22 @@ setNameValue(const QString &name, const QVariant &value)
 
 void
 FileWidget::
-draw(QPainter *)
+draw(QPainter *, int /*dx*/, int /*dy*/)
 {
 }
 
 QSize
 FileWidget::
-calcSize() const
+contentsSizeHint() const
 {
   return QSize(-1, 400);
+}
+
+QSize
+FileWidget::
+contentsSize() const
+{
+  return QSize(width_, height_);
 }
 
 //------
@@ -120,9 +132,7 @@ exec(CQTclCmd::CmdArgs &argv)
 
   auto fileName = argv.getParseStr("file");
 
-  widget = new FileWidget(area, fileName);
-
-  area->addWidget(widget);
+  widget = makeWidget<FileWidget>(area, fileName);
 
   return frame_->setCmdRc(widget->id());
 }

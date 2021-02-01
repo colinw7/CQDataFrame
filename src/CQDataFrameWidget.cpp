@@ -14,6 +14,7 @@
 #include <QMouseEvent>
 #include <QClipboard>
 #include <QPainter>
+#include <QHBoxLayout>
 
 namespace CQDataFrame {
 
@@ -23,13 +24,44 @@ Widget(Area *area) :
 {
   setObjectName("widget");
 
-  bgColor_ = QColor(220, 220, 220);
-
   setFocusPolicy(Qt::NoFocus);
 
   setMouseTracking(true);
 
+  //---
+
+  auto *layout = new QHBoxLayout(this);
+  layout->setMargin(0); layout->setSpacing(0);
+
+  contents_ = new WidgetContents(this);
+
+  contents_->setCursor(Qt::ArrowCursor);
+
+  scrollArea_ = new CQScrollArea(contents_);
+
+  scrollArea_->setCursor(Qt::ArrowCursor);
+
+  connect(scrollArea_, SIGNAL(updateArea()), this, SLOT(contentsUpdateSlot()));
+
+  layout->addWidget(scrollArea_);
+
+  bgColor_ = QColor(220, 220, 220);
+
   setContextMenuPolicy(Qt::DefaultContextMenu);
+}
+
+void
+Widget::
+init()
+{
+  addWidgets();
+}
+
+void
+Widget::
+contentsUpdateSlot()
+{
+  contents_->update();
 }
 
 void
@@ -39,7 +71,7 @@ setExpanded(bool b)
   if (b != expanded_) {
     expanded_ = b;
 
-    area()->placeWidgets();
+    placeWidgets();
   }
 }
 
@@ -50,7 +82,7 @@ setEditing(bool b)
   if (b != editing_) {
     editing_ = b;
 
-    area()->placeWidgets();
+    placeWidgets();
   }
 }
 
@@ -64,6 +96,8 @@ setDocked(bool b)
     if (docked_) {
       larea()->removeWidget(this);
 
+      x_ = rarea()->margin(); y_ = rarea()->margin();
+
       rarea()->addWidget(this);
     }
     else {
@@ -72,6 +106,31 @@ setDocked(bool b)
       larea()->addWidget(this);
     }
   }
+}
+
+void
+Widget::
+setResizeFrame(bool b)
+{
+  if (b != resizeFrame_) {
+    resizeFrame_ = b;
+  }
+}
+
+void
+Widget::
+setResizeContents(bool b)
+{
+  if (b != resizeContents_) {
+    resizeContents_ = b;
+  }
+}
+
+void
+Widget::
+placeWidgets()
+{
+  area()->placeWidgets();
 }
 
 void
@@ -134,14 +193,54 @@ qtcl() const
   return frame()->qtcl();
 }
 
+void
+Widget::
+setWidgetWidth(int w)
+{
+  const auto &margins = contentsMargins();
+
+  int xm = margins.left() + margins.right();
+
+  setContentsWidth(w - xm);
+}
+
+void
+Widget::
+setWidgetHeight(int h)
+{
+  const auto &margins = contentsMargins();
+
+  int ym = margins.top() + margins.bottom();
+
+  setContentsHeight(h - ym);
+}
+
+void
+Widget::
+setContentsWidth(int w)
+{
+  width_ = w;
+
+  updateSize();
+}
+
+void
+Widget::
+setContentsHeight(int h)
+{
+  height_ = h;
+
+  updateSize();
+}
+
 bool
 Widget::
 getNameValue(const QString &name, QVariant &value) const
 {
-  if      (name == "x"     ) value = x     ();
-  else if (name == "y"     ) value = y     ();
-  else if (name == "width" ) value = width ();
-  else if (name == "height") value = height();
+  if      (name == "x"     ) value = x             ();
+  else if (name == "y"     ) value = y             ();
+  else if (name == "width" ) value = contentsWidth ();
+  else if (name == "height") value = contentsHeight();
   else
     return false;
 
@@ -155,9 +254,9 @@ setNameValue(const QString &name, const QVariant &value)
   bool ok { true };
 
   if      (name == "width")
-    setWidth(value.toInt(&ok));
+    setContentsWidth(value.toInt(&ok));
   else if (name == "height")
-    setHeight(value.toInt(&ok));
+    setContentsHeight(value.toInt(&ok));
   else
     return false;
 
@@ -188,7 +287,7 @@ addMenuItems(QMenu *menu)
     expandAction->setCheckable(true);
     expandAction->setChecked  (isExpanded());
 
-    connect(expandAction, SIGNAL(triggered(bool)), this, SLOT(setExpanded(bool)));
+    connect(expandAction, SIGNAL(triggered(bool)), this, SLOT(setExpandedSlot(bool)));
   }
 
   if (canDock()) {
@@ -217,6 +316,24 @@ addMenuItems(QMenu *menu)
 
   //---
 
+#if 0
+  auto *resizeFrameAction = menu->addAction("Resize Frame");
+
+  resizeFrameAction->setCheckable(true);
+  resizeFrameAction->setChecked  (isResizeFrame());
+
+  connect(resizeFrameAction, SIGNAL(triggered(bool)), this, SLOT(setResizeFrame(bool)));
+
+  auto *resizeContentsAction = menu->addAction("Resize Contents");
+
+  resizeContentsAction->setCheckable(true);
+  resizeContentsAction->setChecked  (isResizeContents());
+
+  connect(resizeContentsAction, SIGNAL(triggered(bool)), this, SLOT(setResizeContents(bool)));
+#endif
+
+  //---
+
   menu->addSeparator();
 
   auto *loadAction = menu->addAction("Load");
@@ -228,23 +345,69 @@ addMenuItems(QMenu *menu)
   connect(saveAction, SIGNAL(triggered()), this, SLOT(saveSlot()));
 }
 
+//---
+
+void
+Widget::
+paintEvent(QPaintEvent *)
+{
+  QPainter painter(this);
+
+  // draw border (contents margins)
+  drawBorder(&painter);
+
+  //---
+
+  // fill contents
+  const auto &margins = contentsMargins();
+
+  int l = margins.left  ();
+  int t = margins.top   ();
+  int r = margins.right ();
+  int b = margins.bottom();
+
+  int w = QFrame::width ();
+  int h = QFrame::height();
+
+  QRect rect(l, t, w - l - r, h - t - b);
+
+  if (isExpanded())
+    painter.fillRect(rect, bgColor_);
+  else
+    painter.fillRect(rect, QColor(200, 200, 200));
+}
+
 void
 Widget::
 mousePressEvent(QMouseEvent *e)
 {
-  if      (e->button() == Qt::LeftButton) {
+  if (e->button() == Qt::LeftButton) {
     const auto &margins = contentsMargins();
 
     if (e->x() < margins.left() || e->x() >= width () - margins.right () - 1 ||
         e->y() < margins.top () || e->y() >= height() - margins.bottom() - 1) {
+      // bottom right
       if (e->x() >= width () - margins.right () - 1 &&
           e->y() >= height() - margins.bottom() - 1) {
         mouseData_.dragging = true;
         mouseData_.resizing = true;
       }
+      else if (e->x() >= width () - margins.right () - 1) {
+        mouseData_.dragging = true;
+        mouseData_.resizing = true;
+        mouseData_.resizeY  = false;
+      }
+      else if (e->y() >= height() - margins.bottom() - 1) {
+        mouseData_.dragging = true;
+        mouseData_.resizing = true;
+        mouseData_.resizeX  = false;
+      }
       else {
-        if (isDocked())
+        if (isDocked()) {
           mouseData_.dragging = true;
+
+          raise();
+        }
       }
 
       if (mouseData_.dragging) {
@@ -252,7 +415,7 @@ mousePressEvent(QMouseEvent *e)
 
         mouseData_.dragX  = this->x();
         mouseData_.dragY  = this->y();
-        mouseData_.dragW  = this->width ();
+        mouseData_.dragW  = this->width();
         mouseData_.dragH  = this->height();
         mouseData_.dragX1 = pos.x();
         mouseData_.dragY1 = pos.y();
@@ -260,17 +423,6 @@ mousePressEvent(QMouseEvent *e)
         return;
       }
     }
-
-    (void) pixelToText(e->pos(), mouseData_.pressLineNum, mouseData_.pressCharNum);
-
-    mouseData_.pressed     = true;
-    mouseData_.moveLineNum = mouseData_.pressLineNum;
-    mouseData_.moveCharNum = mouseData_.pressCharNum;
-  }
-  else if (e->button() == Qt::MiddleButton) {
-    paste();
-
-    update();
   }
 }
 
@@ -297,19 +449,39 @@ mouseMoveEvent(QMouseEvent *e)
       this->move(this->x() + xo, this->y() + yo);
     }
     else {
-      this->setWidth (mouseData_.dragW + dx);
-      this->setHeight(mouseData_.dragH + dy);
+#if 0
+      if (isResizeContents()) {
+        if (mouseData_.resizeX)
+          this->setContentsWidth(mouseData_.dragW + dx);
+        else
+          this->setContentsWidth(mouseData_.dragW);
 
-      this->resize(this->width(), this->height());
+        if (mouseData_.resizeY)
+          this->setContentsHeight(mouseData_.dragH + dy);
+        else
+          this->setContentsHeight(mouseData_.dragH);
+      }
+#endif
 
-      if (! isDocked())
-        area()->placeWidgets();
+      if (isResizeFrame()) {
+        //const auto &margins = contentsMargins();
+
+        //int xm = margins.left() + margins.right ();
+        //int ym = margins.top () + margins.bottom();
+
+        //int w = this->contentsWidth () + xm;
+        //int h = this->contentsHeight() + ym;
+
+        int w = mouseData_.dragW + dx;
+        int h = mouseData_.dragH + dy;
+
+        this->resize(w, h);
+      }
+
+      updateSize();
+
+      placeWidgets();
     }
-  }
-  else if (mouseData_.pressed) {
-    (void) pixelToText(e->pos(), mouseData_.moveLineNum, mouseData_.moveCharNum);
-
-    update();
   }
   else {
     const auto &margins = contentsMargins();
@@ -317,6 +489,12 @@ mouseMoveEvent(QMouseEvent *e)
     if      (e->x() >= width () - margins.right () - 1 &&
              e->y() >= height() - margins.bottom() - 1) {
       setCursor(Qt::SizeFDiagCursor);
+    }
+    else if (e->x() >= width () - margins.right () - 1) {
+      setCursor(Qt::SizeHorCursor);
+    }
+    else if (e->y() >= height() - margins.bottom() - 1) {
+      setCursor(Qt::SizeVerCursor);
     }
     else if (e->x() < margins.left() || e->x() >= width () - margins.right () - 1 ||
              e->y() < margins.top () || e->y() >= height() - margins.bottom() - 1) {
@@ -333,13 +511,53 @@ mouseMoveEvent(QMouseEvent *e)
 
 void
 Widget::
-mouseReleaseEvent(QMouseEvent *e)
+mouseReleaseEvent(QMouseEvent *)
+{
+  mouseData_.reset();
+}
+
+//---
+
+void
+Widget::
+contentsMousePress(QMouseEvent *e)
+{
+  if (e->button() == Qt::LeftButton) {
+    (void) pixelToText(e->pos(), mouseData_.pressLineNum, mouseData_.pressCharNum);
+
+    mouseData_.pressed     = true;
+    mouseData_.moveLineNum = mouseData_.pressLineNum;
+    mouseData_.moveCharNum = mouseData_.pressCharNum;
+  }
+  else if (e->button() == Qt::MiddleButton) {
+    paste();
+
+    update();
+  }
+}
+
+void
+Widget::
+contentsMouseMove(QMouseEvent *e)
+{
+  if (mouseData_.pressed) {
+    (void) pixelToText(e->pos(), mouseData_.moveLineNum, mouseData_.moveCharNum);
+
+    update();
+  }
+}
+
+void
+Widget::
+contentsMouseRelease(QMouseEvent *e)
 {
   if (mouseData_.pressed)
     (void) pixelToText(e->pos(), mouseData_.moveLineNum, mouseData_.moveCharNum);
 
   mouseData_.reset();
 }
+
+//---
 
 bool
 Widget::
@@ -372,30 +590,27 @@ pixelToText(const QPoint &p, int &lineNum, int &charNum)
 
 void
 Widget::
-paintEvent(QPaintEvent *)
+updateSize()
 {
-  QPainter painter(this);
+  auto size = contents_->contentsSize();
 
-  drawBorder(&painter);
+  scrollArea_->setXSize(size.width ());
+  scrollArea_->setYSize(size.height());
 
-  if (isExpanded()) {
-    painter.fillRect(contentsRect(), bgColor_);
-
-    draw(&painter);
-  }
-  else
-    painter.fillRect(contentsRect(), QColor(200, 200, 200));
+  scrollArea_->showHBar(QFrame::width () < size.width ());
+  scrollArea_->showVBar(QFrame::height() < size.height());
 }
 
 void
 Widget::
-resizeEvent(QResizeEvent *)
+drawContents(QPainter *painter)
 {
-  // actual size
-  width_  = QFrame::width ();
-  height_ = QFrame::height();
+  if (isExpanded()) {
+    int dx = scrollArea_->getXOffset();
+    int dy = scrollArea_->getYOffset();
 
-  handleResize(width_, height_);
+    draw(painter, dx, dy);
+  }
 }
 
 void
@@ -425,17 +640,10 @@ QRect
 Widget::
 contentsRect() const
 {
-  const auto &margins = contentsMargins();
-
-  int l = margins.left  ();
-  int t = margins.top   ();
-  int r = margins.right ();
-  int b = margins.bottom();
-
   int w = width ();
   int h = height();
 
-  return QRect(l, t, w - l - r, h - t - b);
+  return QRect(0, 0, w, h);
 }
 
 void
@@ -526,16 +734,6 @@ Widget::
 saveSlot()
 {
   this->frame()->save();
-}
-
-QSize
-Widget::
-sizeHint() const
-{
-  if (! expanded_)
-    return QSize(-1, 20);
-
-  return calcSize();
 }
 
 //---
@@ -645,6 +843,95 @@ parseCommand(const QString &line, std::string &name, std::vector<std::string> &a
 
     args.push_back(arg.toStdString());
   }
+}
+
+//---
+
+QSize
+Widget::
+sizeHint() const
+{
+  QSize s = contents_->sizeHint();
+
+  const auto &margins = contentsMargins();
+
+  int w = s.width ();
+  int h = s.height();
+
+  if (w > 0) { int xm = margins.left() + margins.right (); w += xm; }
+  if (h > 0) { int ym = margins.top () + margins.bottom(); h += ym; }
+
+  return QSize(w, h);
+}
+
+//---
+
+WidgetContents::
+WidgetContents(Widget *widget) :
+ widget_(widget)
+{
+  setObjectName("contents");
+
+  setFocusPolicy(Qt::NoFocus);
+
+  setMouseTracking(true);
+}
+
+void
+WidgetContents::
+paintEvent(QPaintEvent *)
+{
+  QPainter painter(this);
+
+  widget_->drawContents(&painter);
+}
+
+void
+WidgetContents::
+resizeEvent(QResizeEvent *)
+{
+  //widget_->resizeContents(width(), height());
+}
+
+void
+WidgetContents::
+mousePressEvent(QMouseEvent *e)
+{
+  widget_->contentsMousePress(e);
+}
+
+void
+WidgetContents::
+mouseMoveEvent(QMouseEvent *e)
+{
+  widget_->contentsMouseMove(e);
+}
+
+void
+WidgetContents::
+mouseReleaseEvent(QMouseEvent *e)
+{
+  widget_->contentsMouseRelease(e);
+}
+
+QSize
+WidgetContents::
+sizeHint() const
+{
+  if (! widget_->isExpanded())
+    return QSize(-1, 20);
+
+  return widget_->contentsSizeHint();
+}
+
+QSize
+WidgetContents::
+contentsSize() const
+{
+  if (! widget_->isExpanded())
+    return QSize(-1, 20);
+
+  return widget_->contentsSize();
 }
 
 }

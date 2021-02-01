@@ -8,11 +8,16 @@ namespace CQDataFrame {
 
 HtmlWidget::
 HtmlWidget(Area *area, const FileText &fileText) :
- Widget(area)
+ Widget(area), fileText_(fileText)
 {
   setObjectName("html");
+}
 
-  auto *layout = new QVBoxLayout(this);
+void
+HtmlWidget::
+addWidgets()
+{
+  auto *layout = new QVBoxLayout(contents_);
   layout->setMargin(0); layout->setSpacing(0);
 
   textEdit_ = new QTextEdit;
@@ -22,7 +27,7 @@ HtmlWidget(Area *area, const FileText &fileText) :
 
   layout->addWidget(textEdit_);
 
-  setFileText(fileText);
+  setFileText(fileText_);
 }
 
 QString
@@ -57,20 +62,31 @@ setFileText(const FileText &fileText)
 
 void
 HtmlWidget::
-draw(QPainter *)
+setExpanded(bool b)
+{
+  textEdit_->setVisible(b);
+
+  Widget::setExpanded(b);
+}
+
+void
+HtmlWidget::
+draw(QPainter *, int /*dx*/, int /*dy*/)
 {
 }
 
 QSize
 HtmlWidget::
-calcSize() const
+contentsSizeHint() const
 {
-  auto *doc    = textEdit_->document();
-  auto *layout = doc->documentLayout();
+  return QSize(-1, 400);
+}
 
-  int h = layout->documentSize().height() + 8;
-
-  return QSize(-1, h);
+QSize
+HtmlWidget::
+contentsSize() const
+{
+  return QSize(width(), height());
 }
 
 //------
@@ -120,16 +136,12 @@ exec(CQTclCmd::CmdArgs &argv)
   if      (argv.hasParseArg("file")) {
     auto file = argv.getParseStr("file");
 
-    widget = new HtmlWidget(area, FileText(FileText::Type::FILENAME, file));
-
-    area->addWidget(widget);
+    widget = makeWidget<HtmlWidget>(area, FileText(FileText::Type::FILENAME, file));
   }
   else if (argv.hasParseArg("text")) {
     auto text = argv.getParseStr("text");
 
-    widget = new HtmlWidget(area, FileText(FileText::Type::TEXT, text));
-
-    area->addWidget(widget);
+    widget = makeWidget<HtmlWidget>(area, FileText(FileText::Type::TEXT, text));
   }
   else
     return false;

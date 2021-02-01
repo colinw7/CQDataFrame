@@ -2,6 +2,7 @@
 #define CQDataFrameSVG_H
 
 #include <CQDataFrame.h>
+#include <CQDataFrameWidget.h>
 #include <CQDataFrameFileText.h>
 
 namespace CQDataFrame {
@@ -23,10 +24,11 @@ class SVGWidget : public Widget {
   bool getNameValue(const QString &name, QVariant &value) const override;
   bool setNameValue(const QString &name, const QVariant &value) override;
 
-  QSize calcSize() const override;
+  QSize contentsSizeHint() const override;
+  QSize contentsSize() const override;
 
  private:
-  void draw(QPainter *painter) override;
+  void draw(QPainter *painter, int dx, int dy) override;
 
  private:
   FileText fileText_;
@@ -43,11 +45,7 @@ class SVGFactory : public WidgetFactory {
   }
 
   Widget *addWidget(Area *area) override {
-    auto *widget = new SVGWidget(area);
-
-    area->addWidget(widget);
-
-    return widget;
+    return makeWidget<SVGWidget>(area);
   }
 };
 

@@ -15,7 +15,9 @@ class TclWidget : public TextWidget {
   Q_PROPERTY(QString command READ cmd WRITE setCmd)
 
  public:
-  TclWidget(Area *area, const QString &cmd, const QString &res);
+  TclWidget(Area *area, const QString &cmd, bool expr, const QString &res);
+
+  void addWidgets() override;
 
   bool canEdit() const override { return true; }
 
@@ -27,7 +29,8 @@ class TclWidget : public TextWidget {
 
   void addMenuItems(QMenu *menu) override;
 
-  QSize calcSize() const override;
+  QSize contentsSizeHint() const override;
+  QSize contentsSize() const override;
 
  private:
   void updateLayout();
@@ -40,10 +43,11 @@ class TclWidget : public TextWidget {
   void rerunSlot();
 
  private:
-  void draw(QPainter *painter) override;
+  void draw(QPainter *painter, int dx, int dy) override;
 
  private:
   QString      cmd_;
+  bool         expr_      { false };
   QTextEdit*   edit_      { nullptr };
   QToolButton* runButton_ { nullptr };
 };

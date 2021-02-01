@@ -86,19 +86,15 @@ freeLines(LineList &lines) const
 
 void
 TextWidget::
-draw(QPainter *painter)
+draw(QPainter *painter, int dx, int dy)
 {
-  const auto &margins = contentsMargins();
-
-  int x = margins.left();
-  int y = margins.top ();
-
-  //---
-
   if (isError())
     painter->fillRect(contentsRect(), errorColor_);
 
   //---
+
+  int x = dx;
+  int y = dy;
 
   drawText(painter, x, y);
 }
@@ -107,6 +103,9 @@ void
 TextWidget::
 drawText(QPainter *painter, int x, int &y)
 {
+//int w = this->width ();
+  int h = this->height();
+
   // draw lines
   painter->setPen(fgColor_);
 
@@ -114,7 +113,10 @@ drawText(QPainter *painter, int x, int &y)
     line->setX(x);
     line->setY(y);
 
-    Widget::drawText(painter, x, y, line->text());
+    bool onScreen = (y > -charData_.height && y <= h + charData_.height);
+
+    if (onScreen)
+      Widget::drawText(painter, x, y, line->text());
 
     y += charData_.height;
   }
@@ -245,25 +247,21 @@ selectedText() const
 
 QSize
 TextWidget::
-calcSize() const
+contentsSizeHint() const
 {
-  const auto &margins = contentsMargins();
-
-  int xm = margins.left() + margins.right ();
-  int ym = margins.top () + margins.bottom();
-
-  //---
-
-  const auto &text = this->text();
-
-  QSize size = textSize(text);
-
-  return QSize(size.width() + xm, size.height() + ym);
+  return textSize(text(), 25);
 }
 
 QSize
 TextWidget::
-textSize(const QString &text) const
+contentsSize() const
+{
+  return textSize(text(), -1);
+}
+
+QSize
+TextWidget::
+textSize(const QString &text, int maxLines) const
 {
   int len = text.length();
 
@@ -286,6 +284,12 @@ textSize(const QString &text) const
 
   if (currentWidth > 0)
     ++numLines;
+
+  if (numLines < 1)
+    numLines = 1;
+
+  if (maxLines > 0 && numLines > maxLines)
+    numLines = maxLines;
 
   return QSize(maxWidth*charData_.width, numLines*charData_.height);
 }

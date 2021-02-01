@@ -16,11 +16,14 @@
 #endif
 #include <CQDataFrameHtml.h>
 
-#ifdef MODEL_DATA
-#include <CQDataFrameModel.h>
+#define USE_CQAPP 1
+
+#ifdef USE_CQAPP
+#include <CQApp.h>
+#else
+#include <QApplication>
 #endif
 
-#include <QApplication>
 #include <QVBoxLayout>
 
 CQDataFrameTest::
@@ -62,12 +65,6 @@ addWidgets()
   frame_->addWidgetFactory(new CQDataFrame::FileFactory);
 #endif
   frame_->addWidgetFactory(new CQDataFrame::HtmlFactory);
-
-  //---
-
-#ifdef MODEL_DATA
-  CQDataFrame::ModelMgrInst->addCmds(frame_);
-#endif
 }
 
 void
@@ -82,7 +79,11 @@ load(const QString &fileName)
 int
 main(int argc, char **argv)
 {
+#ifdef USE_CQAPP
+  CQApp app(argc, argv);
+#else
   QApplication app(argc, argv);
+#endif
 
   app.setFont(QFont("Sans", 20));
 

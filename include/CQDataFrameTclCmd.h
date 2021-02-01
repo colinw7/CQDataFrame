@@ -36,8 +36,12 @@ class NAME##TclCmd : public CQTclCmd::CmdProc { \
     return args.addCmdArg(name, int(type), argDesc, desc); \
   } \
 \
+  void *data() const { return data_; } \
+  void setData(void *p) { data_ = p; } \
+\
  public: \
   Frame *frame_ { nullptr }; \
+  void*  data_  { nullptr }; \
 };
 
 #define CQDATA_FRAME_INST_TCL_CMD(NAME) \
@@ -71,9 +75,13 @@ class NAME##InstTclCmd : public CQTclCmd::CmdProc { \
     return args.addCmdArg(name, int(type), argDesc, desc); \
   } \
 \
+  void *data() const { return data_; } \
+  void setData(void *p) { data_ = p; } \
+\
  public: \
   Frame*  frame_ { nullptr }; \
   QString id_; \
+  void*   data_  { nullptr }; \
 };
 
 }

@@ -17,8 +17,13 @@ WebWidget(Area *area, const QString &addr) :
  Widget(area), addr_(addr)
 {
   setObjectName("web");
+}
 
-  auto *layout = new QVBoxLayout(this);
+void
+WebWidget::
+addWidgets()
+{
+  auto *layout = new QVBoxLayout(contents_);
   layout->setMargin(0); layout->setSpacing(0);
 
 #ifdef USE_WEBENGINE
@@ -41,15 +46,22 @@ id() const
 
 void
 WebWidget::
-draw(QPainter *)
+draw(QPainter *, int /*dx*/, int /*dy*/)
 {
 }
 
 QSize
 WebWidget::
-calcSize() const
+contentsSizeHint() const
 {
   return QSize(-1, 400);
+}
+
+QSize
+WebWidget::
+contentsSize() const
+{
+  return QSize(width_, height_);
 }
 
 //------
@@ -85,9 +97,7 @@ exec(CQTclCmd::CmdArgs &argv)
 
   auto *area = frame_->larea();
 
-  auto *widget = new WebWidget(area, addr);
-
-  area->addWidget(widget);
+  auto *widget = makeWidget<WebWidget>(area, addr);
 
   return frame_->setCmdRc(widget->id());
 }

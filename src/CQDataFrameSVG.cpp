@@ -36,7 +36,7 @@ setNameValue(const QString &name, const QVariant &value)
 
 void
 SVGWidget::
-draw(QPainter *painter)
+draw(QPainter *painter, int /*dx*/, int /*dy*/)
 {
   QSvgRenderer renderer;
 
@@ -54,7 +54,14 @@ draw(QPainter *painter)
 
 QSize
 SVGWidget::
-calcSize() const
+contentsSizeHint() const
+{
+  return QSize(-1, 400);
+}
+
+QSize
+SVGWidget::
+contentsSize() const
 {
   QSvgRenderer renderer;
 
@@ -125,16 +132,12 @@ exec(CQTclCmd::CmdArgs &argv)
   if      (argv.hasParseArg("file")) {
     auto file = argv.getParseStr("file");
 
-    widget = new SVGWidget(area, FileText(FileText::Type::FILENAME, file));
-
-    area->addWidget(widget);
+    widget = makeWidget<SVGWidget>(area, FileText(FileText::Type::FILENAME, file));
   }
   else if (argv.hasParseArg("text")) {
     auto text = argv.getParseStr("text");
 
-    widget = new SVGWidget(area, FileText(FileText::Type::TEXT, text));
-
-    area->addWidget(widget);
+    widget = makeWidget<SVGWidget>(area, FileText(FileText::Type::TEXT, text));
   }
   else
     return false;

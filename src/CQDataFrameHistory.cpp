@@ -27,16 +27,11 @@ id() const
 
 void
 HistoryWidget::
-draw(QPainter *painter)
+draw(QPainter *painter, int dx, int dy)
 {
-  const auto &margins = contentsMargins();
-
-  int x = margins.left();
-  int y = margins.top ();
-
   painter->setPen(fgColor_);
 
-  drawText(painter, x, y, text_);
+  drawText(painter, dx, dy, text_);
 }
 
 void
@@ -74,15 +69,22 @@ save(QTextStream &os)
 
 QSize
 HistoryWidget::
-calcSize() const
+contentsSizeHint() const
 {
-  const auto &margins = contentsMargins();
+  return calcSize(25);
+}
 
-  int xm = margins.left() + margins.right ();
-  int ym = margins.top () + margins.bottom();
+QSize
+HistoryWidget::
+contentsSize() const
+{
+  return calcSize(-1);
+}
 
-  //---
-
+QSize
+HistoryWidget::
+calcSize(int maxLines) const
+{
   int len = text_.length();
 
   int numLines     = 0;
@@ -110,7 +112,14 @@ calcSize() const
   if (currentWidth > 0)
     ++numLines;
 
-  return QSize(maxWidth*charData_.width + xm, numLines*charData_.height + ym);
+  if (numLines < 1)
+    numLines = 1;
+
+  if (maxLines > 0 && numLines > maxLines)
+    numLines = maxLines;
+
+  return QSize(maxWidth*charData_.width, numLines*charData_.height);
 }
+
 
 }

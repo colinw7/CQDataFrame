@@ -1,4 +1,7 @@
 #include <CQDataFrame.h>
+#include <CQDataFrameCommand.h>
+#include <CQDataFrameHistory.h>
+#include <CQDataFrameText.h>
 
 #include <CQTabSplit.h>
 #include <CQStrUtil.h>
@@ -99,6 +102,8 @@ Frame(QWidget *parent) :
 
   // tab for sequential and docked widgets
   tab_ = new CQTabSplit;
+
+  tab_->setState(CQTabSplit::State::TAB);
 
   layout->addWidget(tab_);
 
@@ -310,6 +315,13 @@ load(const QString &fileName)
   return true;
 }
 
+QSize
+Frame::
+sizeHint() const
+{
+  return QSize(800, 800);
+}
+
 //---
 
 Scroll::
@@ -341,11 +353,8 @@ Area(Scroll *scroll) :
   setObjectName("area");
 
   // single command entry widget
-  if (scroll_->isCommand()) {
-    command_ = new CommandWidget(this);
-
-    addWidget(command_);
-  }
+  if (scroll_->isCommand())
+    command_ = makeWidget<CommandWidget>(this);
 }
 
 Area::
@@ -384,22 +393,14 @@ TextWidget *
 Area::
 addTextWidget(const QString &text)
 {
-  auto *widget = new TextWidget(this, text);
-
-  addWidget(widget);
-
-  return widget;
+  return makeWidget<TextWidget>(this, text);
 }
 
 HistoryWidget *
 Area::
 addHistoryWidget(const QString &text)
 {
-  auto *widget = new HistoryWidget(this, ++ind_, text);
-
-  addWidget(widget);
-
-  return widget;
+  return makeWidget<HistoryWidget>(this, ++ind_, text);
 }
 
 //---
@@ -409,6 +410,8 @@ Area::
 addWidget(Widget *widget)
 {
   widget->setParent(this);
+  widget->setArea  (this);
+
   widget->setVisible(true);
 
   if (widget->pos() < 0) {
@@ -440,9 +443,9 @@ addWidget(Widget *widget)
   connect(widget, SIGNAL(contentsChanged()), this, SLOT(updateWidgets()));
 
   if (scroll_->isCommand())
-    widget->setContentsMargins(margin_, margin_, margin_, margin_);
+    widget->setContentsMargins(margin(), margin(), margin(), margin());
   else
-    widget->setContentsMargins(margin_, margin_ + 16, margin_, margin_);
+    widget->setContentsMargins(margin(), margin() + 16, margin(), margin());
 
   placeWidgets();
 }
@@ -549,63 +552,78 @@ placeWidgets()
   int xo = this->xOffset();
   int yo = this->yOffset();
 
-  int maxWidth = 0;
+  int maxWidth = 0, maxHeight = 0;
 
+  // command area widgets are placed sequentially (top to bottom)
   if (scroll_->isCommand()) {
-    int x = margin_;
-    int y = margin_;
+    int x = margin();
+    int y = margin();
 
     for (const auto &widget : widgets_) {
+      widget->updateSize();
+
+      // get size hint (contents + margins)
       auto size = widget->sizeHint();
 
-      int w1 = size.width (); if (w1 <= 0) w1 = width() - 2*margin_;
-      int h1 = size.height(); if (h1 <= 0) h1 = widget->defaultWidth();
-
-      maxWidth = std::max(maxWidth, w1 + 2*margin_);
-
-      widget->move  (x + xo, y + yo);
-      widget->resize(w1, h1);
-
-      y += h1 + margin_;
-    }
-
-    int maxHeight = y + 2*margin_;
-
-    scroll()->setXSize(maxWidth );
-    scroll()->setYSize(maxHeight);
-
-    //---
-
-    QFontMetrics fm(font());
-
-    int charWidth  = fm.width("X");
-    int charHeight = fm.height();
-
-    scroll()->setXSingleStep(charWidth);
-    scroll()->setYSingleStep(charHeight);
-  }
-  else {
-    int maxHeight = 0;
-
-    for (const auto &widget : widgets_) {
-      auto size = widget->sizeHint();
-
-      int x1 = widget->x() + xo;
-      int y1 = widget->y() + yo;
-      int w1 = size.width (); if (w1 <= 0) w1 = widget->defaultWidth ();
+      // if width unset (<= 0) the use full width, if height unset use default height
+      int w1 = size.width (); if (w1 <= 0) w1 = width() - 2*margin();
       int h1 = size.height(); if (h1 <= 0) h1 = widget->defaultHeight();
 
-      maxWidth  = std::max(maxWidth , x1 + w1);
-      maxHeight = std::max(maxHeight, y1 + h1);
+      // update max width for scrollbars
+      maxWidth = std::max(maxWidth, x + w1);
+
+      // update widget position and move to match scroll
+      widget->setX(x);
+      widget->setY(y);
+
+      widget->move(x + xo, y + yo);
+
+      // update widget size and resize widget
+      widget->setWidgetWidth (w1);
+      widget->setWidgetHeight(h1);
+
+      widget->resize(w1, h1);
+
+      //--
+
+      // next y position
+      y += h1 + margin();
+    }
+
+    maxWidth  += margin();
+    maxHeight  = y + margin();
+  }
+  // dock area widgets are placed as requested (moved to match scroll)
+  else {
+    maxHeight = 0;
+
+    for (const auto &widget : widgets_) {
+      widget->updateSize();
+
+      // move to match scroll
+      int x1 = widget->x() + xo;
+      int y1 = widget->y() + yo;
 
       widget->move(x1, y1);
 
-      widget->resize(w1, h1);
+      //---
+
+      // update sizes for scrollbars
+      auto size = widget->size();
+
+      int w1 = size.width ();
+      int h1 = size.height();
+
+      maxWidth  = std::max(maxWidth , widget->x() + w1);
+      maxHeight = std::max(maxHeight, widget->y() + h1);
     }
 
-    scroll()->setXSize(maxWidth );
-    scroll()->setYSize(maxHeight);
+    maxWidth  += margin();
+    maxHeight += margin();
   }
+
+  scroll()->setXSize(maxWidth );
+  scroll()->setYSize(maxHeight);
 
   //---
 
@@ -639,7 +657,7 @@ paintEvent(QPaintEvent *)
 
   QFontMetrics fm(font());
 
-  painter.drawText(margin_, margin_ + fm.ascent(), dirname.c_str());
+  painter.drawText(margin(), margin() + fm.ascent(), dirname.c_str());
 }
 
 QSize
@@ -648,7 +666,7 @@ sizeHint() const
 {
   const auto &margins = contentsMargins();
 
-  int ym = margins.top() + margins.bottom() + 2*margin_;
+  int ym = margins.top() + margins.bottom() + 2*margin();
 
   //---
 

@@ -1,7 +1,8 @@
 #ifndef CQDataFrameHistory_H
 #define CQDataFrameHistory_H
 
-#include <CQDataFrameText.h>
+#include <CQDataFrame.h>
+#include <CQDataFrameWidget.h>
 
 namespace CQDataFrame {
 
@@ -17,7 +18,10 @@ class HistoryWidget : public Widget {
 
   void save(QTextStream &) override;
 
-  QSize calcSize() const override;
+  QSize contentsSizeHint() const override;
+  QSize contentsSize() const override;
+
+  QSize calcSize(int maxLines) const;
 
  private:
   bool canCollapse() const override { return false; }
@@ -26,7 +30,7 @@ class HistoryWidget : public Widget {
 
   bool canClose() const override { return false; }
 
-  void draw(QPainter *painter) override;
+  void draw(QPainter *painter, int dx, int dy) override;
 
   void drawText(QPainter *painter, int x, int y, const QString &text);
 

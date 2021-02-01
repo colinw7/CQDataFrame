@@ -1,7 +1,7 @@
 #ifndef CQDataFrameCommand_H
 #define CQDataFrameCommand_H
 
-#include <CQDataFrameText.h>
+#include <CQDataFrameWidget.h>
 
 namespace CQDataFrame {
 
@@ -24,7 +24,8 @@ class CommandWidget : public Widget {
 
   void processCommand(const QString &line);
 
-  QSize calcSize() const override;
+  QSize contentsSizeHint() const override;
+  QSize contentsSize() const override;
 
  private:
   class Entry {
@@ -89,13 +90,17 @@ class CommandWidget : public Widget {
 
   //---
 
+  void processCdCommand  (const QString &path);
+  void processUnixCommand(const QString &cmd, const Args &args);
+  void processTclCommand (const QString &cmd, bool expr);
+
+  //---
+
   enum class CompleteMode {
     None,
     Longest,
     Interactive
   };
-
-  //---
 
   bool complete(const QString &text, int pos, QString &newText, CompleteMode completeMode) const;
 
@@ -105,7 +110,7 @@ class CommandWidget : public Widget {
 
   bool canClose() const override { return false; }
 
-  void draw(QPainter *painter) override;
+  void draw(QPainter *painter, int dx, int dy) override;
 
   QString getText() const;
 

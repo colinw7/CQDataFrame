@@ -1,6 +1,7 @@
 #ifndef CQDataFrameWidget_H
 #define CQDataFrameWidget_H
 
+#include <CQScrollArea.h>
 #include <QFrame>
 
 class CQTcl;
@@ -10,14 +11,15 @@ class QTextStream;
 
 namespace CQDataFrame {
 
-class Frame;
 class Area;
+class Frame;
+class WidgetContents;
 
 class Widget : public QFrame {
   Q_OBJECT
 
-  Q_PROPERTY(int width  READ width  WRITE setWidth )
-  Q_PROPERTY(int height READ height WRITE setHeight)
+  Q_PROPERTY(int contentsWidth  READ width  WRITE setContentsWidth )
+  Q_PROPERTY(int contentsHeight READ height WRITE setContentsHeight)
 
  public:
   using Args = std::vector<std::string>;
@@ -25,7 +27,16 @@ class Widget : public QFrame {
  public:
   Widget(Area *area);
 
+  //---
+
+  void init();
+
+  virtual void addWidgets() { }
+
+  //---
+
   Area *area() const { return area_; }
+  void setArea(Area *area) { area_ = area; }
 
   Area *larea() const;
   Area *rarea() const;
@@ -40,10 +51,13 @@ class Widget : public QFrame {
   void setPos(int i) { pos_ = i; }
 
   bool isExpanded() const { return expanded_; }
+  virtual void setExpanded(bool b);
 
   bool isEditing() const { return editing_; }
-
   bool isDocked() const { return docked_; }
+
+  bool isResizeFrame   () const { return resizeFrame_   ; }
+  bool isResizeContents() const { return resizeContents_; }
 
   int x() const { return x_; }
   virtual void setX(int x) { x_ = x; }
@@ -51,11 +65,14 @@ class Widget : public QFrame {
   int y() const { return y_; }
   virtual void setY(int y) { y_ = y; }
 
-  virtual int width() const { return width_; }
-  virtual void setWidth(int w) { width_ = w; }
+  void setWidgetWidth (int w);
+  void setWidgetHeight(int h);
 
-  virtual int height() const { return height_; }
-  virtual void setHeight(int h) { height_ = h; }
+  virtual int contentsWidth() const { return width_; }
+  virtual void setContentsWidth(int w);
+
+  virtual int contentsHeight() const { return height_; }
+  virtual void setContentsHeight(int h);
 
   virtual int defaultWidth () const { return 100; }
   virtual int defaultHeight() const { return 100; }
@@ -65,17 +82,17 @@ class Widget : public QFrame {
 
   virtual void addMenuItems(QMenu *menu);
 
-  virtual void draw(QPainter *painter) = 0;
+  void placeWidgets();
+
+  void updateSize();
+
+  virtual void draw(QPainter *painter, int dx, int dy) = 0;
 
   virtual void handleResize(int /*w*/, int /*h*/) { }
 
   void drawText(QPainter *painter, int x, int y, const QString &text);
 
   virtual void save(QTextStream &) { }
-
-  QSize sizeHint() const override;
-
-  virtual QSize calcSize() const = 0;
 
   //---
 
@@ -85,6 +102,31 @@ class Widget : public QFrame {
 
   void parseCommand(const QString &line, std::string &name, Args &args) const;
 
+  //---
+
+  void paintEvent(QPaintEvent *e) override;
+
+  void mousePressEvent  (QMouseEvent *e) override;
+  void mouseMoveEvent   (QMouseEvent *e) override;
+  void mouseReleaseEvent(QMouseEvent *e) override;
+
+  //---
+
+  void contentsMousePress  (QMouseEvent *e);
+  void contentsMouseMove   (QMouseEvent *e);
+  void contentsMouseRelease(QMouseEvent *e);
+
+  bool pixelToText(const QPoint &p, int &lineNum, int &charNum);
+
+  void drawContents(QPainter *painter);
+
+//void resizeContents(int w, int h);
+
+  virtual QSize contentsSizeHint() const = 0;
+  virtual QSize contentsSize() const = 0;
+
+  QSize sizeHint() const override;
+
  protected:
   void setFixedFont();
 
@@ -92,9 +134,15 @@ class Widget : public QFrame {
   void contentsChanged();
 
  protected slots:
-  virtual void setExpanded(bool b);
+  void contentsUpdateSlot();
+
+  void setExpandedSlot(bool b) { setExpanded(b); }
+
   virtual void setEditing(bool b);
   virtual void setDocked(bool b);
+
+  virtual void setResizeFrame   (bool b);
+  virtual void setResizeContents(bool b);
 
   void copySlot();
   void pasteSlot();
@@ -144,16 +192,6 @@ class Widget : public QFrame {
 
   void contextMenuEvent(QContextMenuEvent *e) override;
 
-  void mousePressEvent  (QMouseEvent *e) override;
-  void mouseMoveEvent   (QMouseEvent *e) override;
-  void mouseReleaseEvent(QMouseEvent *e) override;
-
-  bool pixelToText(const QPoint &p, int &lineNum, int &charNum);
-
-  void paintEvent(QPaintEvent *e) override;
-
-  void resizeEvent(QResizeEvent *) override;
-
   void drawBorder(QPainter *painter) const;
 
   QRect contentsRect() const;
@@ -185,6 +223,8 @@ class Widget : public QFrame {
 
     bool dragging { false };
     bool resizing { false };
+    bool resizeX  { true };
+    bool resizeY  { true };
     int  dragX    { 0 };
     int  dragY    { 0 };
     int  dragW    { 0 };
@@ -199,6 +239,8 @@ class Widget : public QFrame {
 
       dragging = false;
       resizing = false;
+      resizeX  = true;
+      resizeY  = true;
       dragX    = 0;
       dragY    = 0;
       dragW    = 0;
@@ -217,21 +259,56 @@ class Widget : public QFrame {
     }
   };
 
-  Area*     area_     { nullptr };
-  int       pos_      { -1 };
-  bool      expanded_ { true };
-  bool      editing_  { false };
-  bool      docked_   { false };
-  QColor    bgColor_  { 240, 240, 240 };
-  QColor    fgColor_  { 0, 0, 0 };
-  CharData  charData_;
-  int       margin_   { 2 };
-  int       x_        { 0 };
-  int       y_        { 0 };
-  int       width_    { -1 };
-  int       height_   { -1 };
-  LineList  lines_;
-  MouseData mouseData_;
+  using ScrollArea = CQScrollArea;
+  using Contents   = WidgetContents;
+
+  Area*       area_           { nullptr }; //!< parent area
+  ScrollArea* scrollArea_     { nullptr }; //!< scroll area
+  Contents*   contents_       { nullptr }; //!< scrolled contents
+  int         pos_            { -1 };
+  bool        expanded_       { true };
+  bool        editing_        { false };
+  bool        docked_         { false };
+  bool        resizeFrame_    { true };
+  bool        resizeContents_ { true };
+  QColor      bgColor_        { 240, 240, 240 };
+  QColor      fgColor_        { 0, 0, 0 };
+  CharData    charData_;
+  int         margin_         { 2 };
+  int         x_              { 0 };
+  int         y_              { 0 };
+  int         width_          { -1 };
+  int         height_         { -1 };
+  LineList    lines_;
+  MouseData   mouseData_;
+};
+
+//---
+
+class WidgetContents : public QFrame {
+  Q_OBJECT
+
+ public:
+  WidgetContents(Widget *widget);
+
+  //---
+
+  void mousePressEvent  (QMouseEvent *e) override;
+  void mouseMoveEvent   (QMouseEvent *e) override;
+  void mouseReleaseEvent(QMouseEvent *e) override;
+
+  void paintEvent(QPaintEvent *e) override;
+
+  void resizeEvent(QResizeEvent *e) override;
+
+  //---
+
+  QSize sizeHint() const override;
+
+  QSize contentsSize() const;
+
+ private:
+  Widget* widget_ { nullptr };
 };
 
 }

@@ -7,7 +7,6 @@
 + complete for more commands. Improve display command
 + reload for all widgets which depend on external state
 + handle escape codes in output (format text to parts ?)
-+ image zoom in/out
 + more canvas commands
 + xml format for table data (CUsage)
-+ add to charts
++ title string

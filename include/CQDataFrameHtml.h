@@ -2,6 +2,7 @@
 #define CQDataFrameHtml_H
 
 #include <CQDataFrame.h>
+#include <CQDataFrameWidget.h>
 #include <CQDataFrameFileText.h>
 
 class QTextEdit;
@@ -17,15 +18,20 @@ class HtmlWidget : public Widget {
  public:
   HtmlWidget(Area *area, const FileText &fileText=FileText());
 
+  void addWidgets() override;
+
   QString id() const override;
 
   const FileText &fileText() const { return fileText_; }
   void setFileText(const FileText &fileText);
 
-  QSize calcSize() const override;
+  void setExpanded(bool b) override;
+
+  QSize contentsSizeHint() const override;
+  QSize contentsSize() const override;
 
  private:
-  void draw(QPainter *painter) override;
+  void draw(QPainter *painter, int dx, int dy) override;
 
  private:
   FileText   fileText_;
@@ -45,11 +51,7 @@ class HtmlFactory : public WidgetFactory {
   }
 
   Widget *addWidget(Area *area) override {
-    auto *widget = new HtmlWidget(area);
-
-    area->addWidget(widget);
-
-    return widget;
+    return makeWidget<HtmlWidget>(area);
   }
 };
 

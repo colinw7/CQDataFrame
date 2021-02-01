@@ -13,13 +13,16 @@
 namespace CQDataFrame {
 
 TclWidget::
-TclWidget(Area *area, const QString &cmd, const QString &res) :
- TextWidget(area, res), cmd_(cmd)
+TclWidget(Area *area, const QString &cmd, bool expr, const QString &res) :
+ TextWidget(area, res), cmd_(cmd), expr_(expr)
 {
   setObjectName("tcl");
+}
 
-  //---
-
+void
+TclWidget::
+addWidgets()
+{
   edit_ = new QTextEdit(this);
 
   edit_->setObjectName("edit");
@@ -42,12 +45,11 @@ void
 TclWidget::
 setEditing(bool b)
 {
-  edit_     ->setVisible(b);
-  runButton_->setVisible(b);
-
   TextWidget::setEditing(b);
 
   updateLayout();
+
+  placeWidgets();
 }
 
 void
@@ -58,17 +60,25 @@ updateLayout()
   runButton_->setVisible(isEditing());
 
   if (isEditing()) {
-    int th = TextWidget::textSize(this->text()).height();
-    int bw = runButton_->sizeHint().width();
+    if (contentsMargins().top())
+      setContentsMargins(0, 0, 0, 0);
 
-    edit_->move(margin_, margin_ + th);
+    auto bs = runButton_->sizeHint();
 
-    edit_->resize(width() - 2*margin_ - bw, height() - 2*margin_ - th);
+    edit_->move  (margin_, height() - margin_ - bs.height());
+    edit_->resize(width() - 2*margin_ - bs.width(), bs.height());
 
-    runButton_->move(edit_->x() + edit_->width(), edit_->y());
+    runButton_->move  (edit_->x() + edit_->width(), edit_->y());
+    runButton_->resize(bs.width(), bs.height());
 
     edit_     ->raise();
     runButton_->raise();
+
+    setContentsMargins(0, 0, 0, bs.height() + margin_);
+  }
+  else {
+    if (contentsMargins().top())
+      setContentsMargins(0, 0, 0, 0);
   }
 }
 
@@ -80,7 +90,9 @@ setCmd(const QString &s)
 
   QString res;
 
-  bool rc = runTclCommand(cmd_, res);
+  auto cmd1 = (expr_ ? "expr {" + cmd_ + "}" : cmd_);
+
+  bool rc = runTclCommand(cmd1, res);
 
   setText(res);
 
@@ -109,9 +121,12 @@ textChangedSlot()
 {
   cmd_ = edit_->toPlainText();
 
-  frame()->larea()->placeWidgets();
-
+  // update layout to ensure command widget is not scrolled/clipped
   updateLayout();
+
+  placeWidgets();
+
+  //update();
 }
 
 void
@@ -130,33 +145,46 @@ rerunSlot()
 
 void
 TclWidget::
-draw(QPainter *painter)
+draw(QPainter *painter, int dx, int dy)
 {
-  return TextWidget::draw(painter);
+  TextWidget::draw(painter, dx, dy);
+
+  updateLayout();
 }
 
 QSize
 TclWidget::
-calcSize() const
+contentsSizeHint() const
 {
+  auto s1 = TextWidget::contentsSizeHint();
+
   if (isEditing()) {
-    const auto &margins = contentsMargins();
+    auto s2 = TextWidget::textSize(this->cmd()) + QSize(48, 8);
+    auto s3 = runButton_->sizeHint();
 
-    int xm = margins.left() + margins.right ();
-    int ym = margins.top () + margins.bottom();
+    return QSize(std::max(s1.width(), int(s2.width()) + s3.width()), s1.height());
+  }
+  else {
+    return s1;
+  }
+}
 
-    //---
+QSize
+TclWidget::
+contentsSize() const
+{
+  auto s1 = TextWidget::contentsSize();
 
-    auto s1 = TextWidget::textSize(this->text());
-    auto s2 = TextWidget::textSize(this->cmd ()) + QSize(32, 8);
+  if (isEditing()) {
+    auto s2 = TextWidget::textSize(this->cmd()) + QSize(48, 8);
   //auto s2 = edit_->document()->documentLayout()->documentSize() + QSizeF(2, 2);
     auto s3 = runButton_->sizeHint();
 
-    return QSize(std::max(s1.width(), int(s2.width()) + s3.width()) + xm,
-                 s1.height() + int(s2.height()) + ym);
+    return QSize(std::max(s1.width(), int(s2.width()) + s3.width()),
+                 s1.height() + int(s2.height()));
   }
   else {
-    return TextWidget::calcSize();
+    return s1;
   }
 }
 

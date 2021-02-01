@@ -1,6 +1,7 @@
 #include <CQDataFrameImage.h>
 
 #include <QPainter>
+#include <QMenu>
 
 namespace CQDataFrame {
 
@@ -33,7 +34,7 @@ setFile(const QString &s)
 
 int
 ImageWidget::
-width() const
+contentsWidth() const
 {
   if (! simage_.isNull())
     return simage_.width();
@@ -43,16 +44,21 @@ width() const
 
 void
 ImageWidget::
-setWidth(int w)
+setContentsWidth(int w)
 {
-  Widget::setWidth(w);
+  if (image_.isNull())
+    return;
+
+  xscale_ = w/image_.width();
+
+  Widget::setContentsWidth(w);
 
   updateImage();
 }
 
 int
 ImageWidget::
-height() const
+contentsHeight() const
 {
   if (! simage_.isNull())
     return simage_.height();
@@ -62,9 +68,14 @@ height() const
 
 void
 ImageWidget::
-setHeight(int h)
+setContentsHeight(int h)
 {
-  Widget::setHeight(h);
+  if (image_.isNull())
+    return;
+
+  yscale_ = h/image_.height();
+
+  Widget::setContentsHeight(h);
 
   updateImage();
 }
@@ -73,14 +84,17 @@ void
 ImageWidget::
 updateImage()
 {
-  if (Widget::width() > 0 || Widget::height() > 0) {
-    int width  = image_.width ();
-    int height = image_.height();
+  if (image_.isNull())
+    return;
 
-    if (Widget::width()  > 0) width  = Widget::width();
-    if (Widget::height() > 0) height = Widget::height();
+  int iwidth  = image_.width ();
+  int iheight = image_.height();
 
-    simage_ = image_.scaled(width, height);
+  if (xscale_ != 1.0 || yscale_ != 1.0) {
+    int swidth  = xscale_*iwidth;
+    int sheight = yscale_*iheight;
+
+    simage_ = image_.scaled(swidth, sheight);
   }
   else
     simage_ = QImage();
@@ -126,30 +140,82 @@ pasteText(const QString &text)
 
 void
 ImageWidget::
-draw(QPainter *painter)
+addMenuItems(QMenu *menu)
 {
-  const auto &margins = contentsMargins();
+  Widget::addMenuItems(menu);
 
-  int x = margins.left();
-  int y = margins.top ();
+  auto *zoomInAction = menu->addAction("Zoom In");
 
+  connect(zoomInAction, SIGNAL(triggered()), this, SLOT(zoomInSlot()));
+
+  auto *zoomOutAction = menu->addAction("Zoom Out");
+
+  connect(zoomOutAction, SIGNAL(triggered()), this, SLOT(zoomOutSlot()));
+
+  if (xscale_ != 1.0 || yscale_ != 1.0) {
+    auto *resetAction = menu->addAction("Reset Size");
+
+    connect(resetAction, SIGNAL(triggered()), this, SLOT(resetSlot()));
+  }
+}
+
+void
+ImageWidget::
+zoomInSlot()
+{
+  xscale_ *= 2.0;
+  yscale_ *= 2.0;
+
+  updateImage();
+
+  placeWidgets();
+}
+
+void
+ImageWidget::
+zoomOutSlot()
+{
+  xscale_ /= 2.0;
+  yscale_ /= 2.0;
+
+  updateImage();
+
+  placeWidgets();
+}
+
+void
+ImageWidget::
+resetSlot()
+{
+  xscale_ = 1.0;
+  yscale_ = 1.0;
+
+  updateImage();
+
+  placeWidgets();
+}
+
+void
+ImageWidget::
+draw(QPainter *painter, int dx, int dy)
+{
   if (! simage_.isNull())
-    painter->drawImage(x, y, simage_);
+    painter->drawImage(dx, dy, simage_);
   else
-    painter->drawImage(x, y, image_);
+    painter->drawImage(dx, dy, image_);
 }
 
 QSize
 ImageWidget::
-calcSize() const
+contentsSizeHint() const
 {
-  const auto &margins = contentsMargins();
+  return image_.size();
+}
 
-  int xm = margins.left() + margins.right ();
-  int ym = margins.top () + margins.bottom();
-
-  //---
-
+QSize
+ImageWidget::
+contentsSize() const
+{
   QSize s;
 
   if (! simage_.isNull())
@@ -157,7 +223,7 @@ calcSize() const
   else
     s = image_.size();
 
-  return QSize(s.width() + xm, s.height() + ym);
+  return QSize(s.width(), s.height());
 }
 
 //------
@@ -201,29 +267,27 @@ exec(CQTclCmd::CmdArgs &argv)
 
   //---
 
-  auto *area = frame_->larea();
-
   if (! argv.hasParseArg("file"))
     return false;
 
   auto fileName = argv.getParseStr("file");
 
-  auto *widget = new ImageWidget(area, fileName);
+  auto *area = frame_->larea();
 
-  area->addWidget(widget);
+  auto *widget = makeWidget<ImageWidget>(area, fileName);
 
   //---
 
   if (argv.hasParseArg("width")) {
     int width = argv.getParseInt("width");
 
-    widget->setWidth(width);
+    widget->setContentsWidth(width);
   }
 
   if (argv.hasParseArg("height")) {
     int height = argv.getParseInt("height");
 
-    widget->setHeight(height);
+    widget->setContentsHeight(height);
   }
 
   return frame_->setCmdRc(widget->id());

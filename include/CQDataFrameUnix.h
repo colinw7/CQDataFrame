@@ -20,6 +20,8 @@ class UnixWidget : public TextWidget {
  public:
   UnixWidget(Area *area, const QString &cmd, const Args &args, const QString &res);
 
+  void addWidgets() override;
+
   bool canEdit() const override { return true; }
 
   void setEditing(bool b) override;
@@ -30,7 +32,8 @@ class UnixWidget : public TextWidget {
 
   void addMenuItems(QMenu *menu) override;
 
-  QSize calcSize() const override;
+  QSize contentsSizeHint() const override;
+  QSize contentsSize() const override;
 
  private:
   QString cmdStr() const;
@@ -45,7 +48,7 @@ class UnixWidget : public TextWidget {
   void rerunSlot();
 
  private:
-  void draw(QPainter *painter) override;
+  void draw(QPainter *painter, int dx, int dy) override;
 
  private:
   QString      cmd_;
