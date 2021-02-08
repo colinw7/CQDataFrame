@@ -192,6 +192,20 @@ getWidgetFactory(const QString &name) const
 
 //---
 
+Widget *
+Frame::
+getWidget(const QString &name) const
+{
+  auto *w = larea()->getWidget(name);
+
+  if (! w)
+    w = rarea()->getWidget(name);
+
+  return w;
+}
+
+//---
+
 bool
 Frame::
 setCmdRc(int rc)
@@ -319,7 +333,7 @@ QSize
 Frame::
 sizeHint() const
 {
-  return QSize(800, 800);
+  return QSize(1600, 1200);
 }
 
 //---

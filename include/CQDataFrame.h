@@ -80,6 +80,10 @@ class Frame : public QFrame {
 
   //---
 
+  Widget *getWidget(const QString &id) const;
+
+  //--
+
   bool setCmdRc(int rc);
   bool setCmdRc(double rc);
   bool setCmdRc(const QString &str);
