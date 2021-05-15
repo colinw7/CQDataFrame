@@ -1,9 +1,8 @@
 #include <CQDataFrameTcl.h>
 #include <CQDataFrame.h>
-#include <CQPixmapCache.h>
+#include <CQIconButton.h>
 
 #include <QTextEdit>
-#include <QToolButton>
 //#include <QAbstractTextDocumentLayout>
 #include <QMenu>
 #include <QPainter>
@@ -29,9 +28,8 @@ addWidgets()
   edit_->setText(cmd_);
   edit_->setVisible(false);
 
-  runButton_ = new QToolButton(this);
-  runButton_->setIcon(CQPixmapCacheInst->getIcon("RUN"));
-  runButton_->setIconSize(QSize(32, 32));
+  runButton_ = new CQIconButton(this);
+  runButton_->setIcon("RUN");
   runButton_->setAutoRaise(true);
   runButton_->setToolTip("Run Command");
   runButton_->setVisible(false);

@@ -3,8 +3,8 @@
 
 #include <CQDataFrameText.h>
 
+class CQIconButton;
 class QTextEdit;
-class QToolButton;
 
 namespace CQDataFrame {
 
@@ -51,11 +51,11 @@ class UnixWidget : public TextWidget {
   void draw(QPainter *painter, int dx, int dy) override;
 
  private:
-  QString      cmd_;
-  Args         args_;
-  QString      errMsg_;
-  QTextEdit*   edit_      { nullptr };
-  QToolButton* runButton_ { nullptr };
+  QString       cmd_;
+  Args          args_;
+  QString       errMsg_;
+  QTextEdit*    edit_      { nullptr };
+  CQIconButton* runButton_ { nullptr };
 };
 
 }
