@@ -7,7 +7,7 @@
 #include <CQDataFrameWidget.h>
 
 //class CQEdit;
-class CQVi;
+class CQViApp;
 
 namespace CQDataFrame {
 
@@ -39,9 +39,9 @@ class FileWidget : public Widget {
   void draw(QPainter *painter, int dx, int dy) override;
 
  private:
-  QString fileName_;
-//CQEdit* edit_ { nullptr };
-  CQVi*   edit_ { nullptr };
+  QString  fileName_;
+//CQEdit*  edit_ { nullptr };
+  CQViApp* edit_ { nullptr };
 };
 
 class FileFactory : public WidgetFactory {

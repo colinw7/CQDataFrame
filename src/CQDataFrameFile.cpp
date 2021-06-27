@@ -39,7 +39,7 @@ addWidgets()
 
   //edit_->getFile()->loadLines(fileName.toStdString());
 
-  edit_ = new CQVi;
+  edit_ = new CQViApp;
 
   edit_->loadFile(fileName_.toStdString());
 
