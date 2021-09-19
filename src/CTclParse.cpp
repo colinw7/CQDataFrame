@@ -194,8 +194,19 @@ readArgList(Tokens &tokens)
     if (parse_->eof())
       return true;
 
-    if      (parse_->isChar(';') || parse_->isChar('\n')) {
+    if      (parse_->isChar('\n')) {
       parse_->skipChar();
+
+      return true;
+    }
+    else if (parse_->isChar(';')) {
+      auto parseData = getParseData();
+
+      parse_->skipChar();
+
+      auto *token = createToken(CTclToken::Type::SEPARATOR, ";", parseData);
+
+      tokens.push_back(token);
 
       return true;
     }
