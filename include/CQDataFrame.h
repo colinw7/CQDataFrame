@@ -247,6 +247,8 @@ class WidgetFactory {
  public:
   WidgetFactory() { }
 
+  virtual ~WidgetFactory() { }
+
   virtual const char *name() const = 0;
 
   virtual void addTclCommand(Frame *frame) = 0;
