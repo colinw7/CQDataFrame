@@ -7,12 +7,12 @@ QT += widgets svg webkitwidgets
 DEPENDPATH += .
 
 QMAKE_CXXFLAGS += \
--std=c++14 \
+-std=c++17 \
 
 MOC_DIR = .moc
 
 CONFIG += staticlib
-CONFIG += c++14
+CONFIG += c++17
 
 SOURCES += \
 CQDataFrame.cpp \
