@@ -95,7 +95,7 @@ contentsSize() const
   auto *doc    = textEdit_->document();
   auto *layout = doc->documentLayout();
 
-  int h = layout->documentSize().height() + 8;
+  int h = int(layout->documentSize().height() + 8);
 
   return QSize(-1, h);
 }

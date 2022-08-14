@@ -564,7 +564,7 @@ Widget::
 pixelToText(const QPoint &p, int &lineNum, int &charNum)
 {
   // continuation lines
-  int numLines = lines_.size();
+  int numLines = int(lines_.size());
 
   lineNum = -1;
   charNum = -1;
@@ -572,7 +572,7 @@ pixelToText(const QPoint &p, int &lineNum, int &charNum)
   int i { 0 }, y1 { 0 }, y2 { 0 };
 
   for ( ; i < numLines; ++i) {
-    auto *line = lines_[i];
+    auto *line = lines_[size_t(i)];
 
     y1 = line->y(); // top
     y2 = y1 + charData_.height - 1;

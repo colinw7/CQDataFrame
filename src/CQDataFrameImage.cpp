@@ -91,8 +91,8 @@ updateImage()
   int iheight = image_.height();
 
   if (xscale_ != 1.0 || yscale_ != 1.0) {
-    int swidth  = xscale_*iwidth;
-    int sheight = yscale_*iheight;
+    int swidth  = int(xscale_*iwidth);
+    int sheight = int(yscale_*iheight);
 
     simage_ = image_.scaled(swidth, sheight);
   }

@@ -431,7 +431,7 @@ addWidget(Widget *widget)
   if (widget->pos() < 0) {
     widgets_.push_back(widget);
 
-    widget->setPos(widgets_.size() - 1);
+    widget->setPos(int(widgets_.size() - 1));
   }
   else {
     bool added = false;

@@ -142,7 +142,7 @@ void
 TextWidget::
 drawSelectedChars(QPainter *painter, int lineNum1, int charNum1, int lineNum2, int charNum2)
 {
-  int numLines = lines_.size();
+  int numLines = int(lines_.size());
 
   painter->setPen(bgColor_);
 
@@ -150,7 +150,7 @@ drawSelectedChars(QPainter *painter, int lineNum1, int charNum1, int lineNum2, i
     if (i < 0 || i >= numLines)
       continue;
 
-    auto *line = lines_[i];
+    auto *line = lines_[size_t(i)];
 
     int ty = line->y();
     int tx = line->x();
@@ -206,14 +206,14 @@ selectedText() const
   if (lineNum1 == lineNum2 && charNum1 == charNum2)
     return "";
 
-  int numLines = lines_.size();
+  int numLines = int(lines_.size());
 
   QString str;
 
   for (int i = lineNum1; i <= lineNum2; ++i) {
     if (i < 0 || i >= numLines) continue;
 
-    auto *line = lines_[i];
+    auto *line = lines_[size_t(i)];
 
     const auto &text = line->text();
 

@@ -275,7 +275,7 @@ drawPixel(const QPointF &p)
     py = p.y();
   }
 
-  ipainter_->drawPoint(px, py);
+  ipainter_->drawPoint(int(px), int(py));
 }
 
 void

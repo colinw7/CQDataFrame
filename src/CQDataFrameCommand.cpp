@@ -47,10 +47,10 @@ draw(QPainter *painter, int dx, int dy)
   //---
 
   // draw lines (above command line)
-  int numLines = lines_.size();
+  int numLines = int(lines_.size());
 
   for (int i = 0; i < numLines; ++i) {
-    auto *line = lines_[i];
+    auto *line = lines_[size_t(i)];
 
     drawLine(painter, line, y);
 
@@ -162,7 +162,7 @@ drawSelectedChars(QPainter *painter, int lineNum1, int charNum1, int lineNum2, i
 
   //---
 
-  int numLines = lines_.size();
+  int numLines = int(lines_.size());
 
   painter->setPen(bgColor_);
 
@@ -172,7 +172,7 @@ drawSelectedChars(QPainter *painter, int lineNum1, int charNum1, int lineNum2, i
 
     // continuation line
     if      (i >= 0 && i < numLines) {
-      auto *line = lines_[i];
+      auto *line = lines_[size_t(i)];
 
       ty = line->y();
       tx = line->x();
@@ -397,7 +397,7 @@ complete(const QString &line, int pos, QString &newText, CompleteMode /*complete
         // get option values to next command
     std::string lastOption;
 
-    for (int pos1 = commandPos + command.length(); pos1 < line.length(); ++pos1) {
+    for (int pos1 = commandPos + int(command.length()); pos1 < line.length(); ++pos1) {
       auto *token1 = parse.getTokenForPos(tokens, pos1);
       if (! token1) continue;
 
@@ -412,13 +412,13 @@ complete(const QString &line, int pos, QString &newText, CompleteMode /*complete
 
         optionValues[lastOption] = "";
 
-        pos1 = token1->pos() + token1->str().length(); // move to end
+        pos1 = token1->pos() + int(token1->str().length()); // move to end
       }
       else {
         if (lastOption != "")
           optionValues[lastOption] = str;
 
-        pos1 = token1->pos() + token1->str().length(); // move to end
+        pos1 = token1->pos() + int(token1->str().length()); // move to end
       }
     }
 
@@ -532,7 +532,7 @@ pixelToText(const QPoint &p, int &lineNum, int &charNum)
   if (Widget::pixelToText(p, lineNum, charNum))
     return true;
 
-  int numLines = lines_.size();
+  int numLines = int(lines_.size());
 
   // current line
   int y1 = numLines*charData_.height;
@@ -920,7 +920,7 @@ selectedText() const
   if (lineNum1 == lineNum2 && charNum1 == charNum2)
     return "";
 
-  int numLines = lines_.size();
+  int numLines = int(lines_.size());
 
   QString str;
 
@@ -929,7 +929,7 @@ selectedText() const
 
     // continuation line
     if      (i >= 0 && i < numLines) {
-      auto *line = lines_[i];
+      auto *line = lines_[size_t(i)];
 
       text = line->text();
     }
@@ -975,10 +975,10 @@ getText() const
   QString text;
   bool    first { true };
 
-  int numLines = lines_.size();
+  int numLines = int(lines_.size());
 
   for (int i = 0; i < numLines; ++i) {
-    auto *line = lines_[i];
+    auto *line = lines_[size_t(i)];
 
     if (! first)
       text += "\n";
@@ -1022,11 +1022,11 @@ contentsSizeHint() const
 {
   int h = charData_.height;
 
-  int numLines = lines_.size();
+  auto numLines = lines_.size();
 
-  numLines = std::min(numLines, 25);
+  numLines = std::min(numLines, 25UL);
 
-  h += numLines*charData_.height;
+  h += int(numLines)*charData_.height;
 
   return QSize(-1, h);
 }
@@ -1037,9 +1037,9 @@ contentsSize() const
 {
   int h = charData_.height;
 
-  int numLines = lines_.size();
+  auto numLines = lines_.size();
 
-  h += numLines*charData_.height;
+  h += int(numLines)*charData_.height;
 
   return QSize(-1, h);
 }
