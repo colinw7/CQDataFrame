@@ -672,7 +672,7 @@ updateFont()
 {
   QFontMetrics fm(font());
 
-  charData_.width   = fm.width("X");
+  charData_.width   = fm.horizontalAdvance("X");
   charData_.height  = fm.height();
   charData_.ascent  = fm.ascent();
 //charData_.descent = fm.descent();

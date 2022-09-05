@@ -3,6 +3,7 @@
 #include <CSVGUtil.h>
 
 #include <QPainter>
+#include <QPainterPath>
 
 namespace CQDataFrame {
 

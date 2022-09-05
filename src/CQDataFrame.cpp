@@ -643,7 +643,7 @@ placeWidgets()
 
   QFontMetrics fm(font());
 
-  int charWidth  = fm.width("X");
+  int charWidth  = fm.horizontalAdvance("X");
   int charHeight = fm.height();
 
   scroll()->setXSingleStep(charWidth);
