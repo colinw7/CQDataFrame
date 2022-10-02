@@ -750,7 +750,7 @@ runTclCommand(const QString &line, QString &res) const
 
   bool log = true;
 
-  int tclRc = qtcl->eval(line, /*showError*/true, /*showResult*/log);
+  bool tclRc = qtcl->eval(line, /*showError*/true, /*showResult*/log);
 
   std::cout << std::flush;
 
@@ -762,10 +762,7 @@ runTclCommand(const QString &line, QString &res) const
 
   res = res1.c_str();
 
-  if (tclRc != TCL_OK)
-    return false;
-
-  return true;
+  return tclRc;
 }
 
 //---

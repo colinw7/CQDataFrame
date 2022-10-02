@@ -121,5 +121,4 @@ calcSize(int maxLines) const
   return QSize(maxWidth*charData_.width, numLines*charData_.height);
 }
 
-
 }
