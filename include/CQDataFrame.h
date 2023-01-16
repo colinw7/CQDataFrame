@@ -138,7 +138,7 @@ class Scroll : public CQScrollArea {
   bool isCommand() const { return isCommand_; }
   void setIsCommand(bool b) { isCommand_ = b; }
 
-  void updateContents();
+  void updateContents() override;
 
  private:
   Frame* frame_     { nullptr };

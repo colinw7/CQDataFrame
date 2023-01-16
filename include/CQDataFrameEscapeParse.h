@@ -15,14 +15,14 @@ class EscapeParse : public CEscapeParse {
 
   const std::string &str() const { return str_; }
 
-  void handleChar(char c) {
+  void handleChar(char c) override {
     str_ +=  c;
   }
 
-  void handleGraphic(char) {
+  void handleGraphic(char) override {
   }
 
-  void handleEscape(const CEscapeData *e) {
+  void handleEscape(const CEscapeData *e) override {
     if      (e->type == CEscapeType::BS ) { }
     else if (e->type == CEscapeType::HT ) { str_ += '\t'; }
     else if (e->type == CEscapeType::LF ) { str_ += '\n'; }
@@ -33,9 +33,9 @@ class EscapeParse : public CEscapeParse {
     }
   }
 
-  void log(const std::string &) const { }
+  void log(const std::string &) const override { }
 
-  void logError(const std::string &) const { }
+  void logError(const std::string &) const override { }
 
   std::string waitMessage(const char *, uint) { return ""; }
 
