@@ -42,7 +42,7 @@ class ImageWidget : public Widget {
   QSize contentsSizeHint() const override;
   QSize contentsSize() const override;
 
- private slots:
+ private Q_SLOTS:
   void zoomInSlot();
   void zoomOutSlot();
   void resetSlot();

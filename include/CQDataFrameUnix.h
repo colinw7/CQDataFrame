@@ -40,7 +40,7 @@ class UnixWidget : public TextWidget {
 
   void updateLayout();
 
- private slots:
+ private Q_SLOTS:
   void textChangedSlot();
 
   void runCmdSlot();

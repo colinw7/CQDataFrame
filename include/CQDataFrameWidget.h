@@ -130,10 +130,10 @@ class Widget : public QFrame {
  protected:
   void setFixedFont();
 
- signals:
+ Q_SIGNALS:
   void contentsChanged();
 
- protected slots:
+ protected Q_SLOTS:
   void contentsUpdateSlot();
 
   void setExpandedSlot(bool b) { setExpanded(b); }

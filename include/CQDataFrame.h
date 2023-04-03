@@ -199,7 +199,7 @@ class Area : public QFrame {
   void save(QTextStream &);
   void load();
 
- private slots:
+ private Q_SLOTS:
   void updateWidgets();
 
  private:

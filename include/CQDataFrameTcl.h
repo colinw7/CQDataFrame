@@ -35,7 +35,7 @@ class TclWidget : public TextWidget {
  private:
   void updateLayout();
 
- private slots:
+ private Q_SLOTS:
   void textChangedSlot();
 
   void runCmdSlot();

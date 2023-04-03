@@ -35,7 +35,7 @@ class FileMgrWidget : public Widget {
  private:
   void draw(QPainter *painter, int dx, int dy) override;
 
- private slots:
+ private Q_SLOTS:
   void fileActivated(const QString &filename);
 
  private:
