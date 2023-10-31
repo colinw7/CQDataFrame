@@ -10,3 +10,4 @@
 + more canvas commands
 + xml format for table data (CUsage)
 + title string
++ add data frame widget to be used standalone
